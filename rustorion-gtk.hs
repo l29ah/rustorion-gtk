@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 
+import Control.Monad
 import Data.Binary.Get
 import Data.Binary.Put
 import qualified Data.ByteString as B
@@ -9,6 +10,7 @@ import Data.Either
 import Data.Maybe
 import Data.MessagePack as MP
 import Data.PEM (pemParseBS, pemContent)
+import qualified Data.Text as T
 import Data.X509 as X509
 import Data.X509.Memory
 import Network.Connection
@@ -25,21 +27,6 @@ readSignedObject file = do
 readCert fn = do
 	objs <- readSignedObject fn
 	pure $ head objs
-	--forM_ objs $ \o ->
-	--	case o of
-	--		Left err	 -> error ("decoding Certificate failed: " ++ show err)
-	--		Right signed -> do
-	--			showCert signed
-  where
-	--	hashCert signedCert = do
-	--		putStrLn ("subject(MD5) old: " ++ hexdump' (X509.hashDN_old subject))
-	--		putStrLn ("issuer(MD5) old:  " ++ hexdump' (X509.hashDN_old issuer))
-	--		putStrLn ("subject(SHA1):" ++ hexdump' (X509.hashDN subject))
-	--		putStrLn ("issuer(SHA1): " ++ hexdump' (X509.hashDN issuer))
-	--		where
-	--			subject = X509.certSubjectDN cert
-	--			issuer  = X509.certIssuerDN cert
-	--			cert	= X509.signedObject $ X509.getSigned signedCert
 
 readKey fn = do
 	pems <- readPEMFile fn
@@ -66,9 +53,11 @@ rpc conn method = do
 	len <- connectionGetExact conn 4
 	reply <- connectionGetExact conn $ fromIntegral $ runGet getWord32be $ BL.fromStrict len
 	[ObjectBool rpcSuccess, ObjectBin retVal] <- unpack $ BL.fromStrict reply
-	-- FIXME check success
-	decRetVal :: UniverseView <- unpack $ BL.fromStrict retVal
-	print $ decRetVal
+	when (rpcSuccess == False) $ fail $ "rpc failed calling " ++ T.unpack method
+	pure retVal
+
+getView :: Connection -> IO UniverseView
+getView conn = rpc conn "get_view" >>= unpack . BL.fromStrict
 
 main = do
 	[key, cert] <- getArgs
@@ -85,4 +74,5 @@ main = do
 		}
 	let tls = Just $ TLSSettings tlsClientParams
 	conn <- connectTo ctx $ ConnectionParams host port tls Nothing
-	rpc conn "get_view"
+	view <- getView conn
+	print view
