@@ -1,0 +1,30 @@
+cabal-version:       2.2
+name:                rustorion-gtk
+version:             0
+-- synopsis:
+-- description:
+license:             AGPL-3.0-only
+license-file:        LICENSE
+author:              Sergey Alirzaev
+maintainer:          zl29ah@gmail.com
+-- copyright:
+category:            Game
+build-type:          Simple
+
+executable rustorion-gtk
+  main-is:             rustorion-gtk.hs
+  ghc-options:         -W -fno-warn-tabs
+  -- other-modules:
+  build-depends:       base >=4.12 && <4.13,
+                       msgpack-binary >=0.0 && <0.1,
+                       msgpack-types ^>= 0,
+                       binary ^>= 0.8,
+                       tls ^>= 1.5,
+                       connection ^>= 0.3,
+                       x509-store ^>= 1.6,
+                       x509 ^>= 1.7,
+                       pem ^>= 0.2,
+                       data-default ^>= 0.7,
+                       bytestring ^>= 0.10,
+                       containers ^>= 0.6,
+  default-language:    Haskell2010

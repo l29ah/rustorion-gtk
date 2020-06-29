@@ -1,8 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-import Codec.CBOR.Read
-import Codec.CBOR.Term
-import Codec.CBOR.Write
 import Control.Monad
 import Data.Binary.Put
 import qualified Data.ByteString as B
@@ -10,6 +7,7 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Default
 import Data.Either
 import Data.Maybe
+import Data.MessagePack as MP
 import Data.PEM (pemParseBS, pemContent, pemName)
 import Data.X509 as X509
 import Data.X509.CertificateStore
@@ -18,6 +16,9 @@ import Network.Connection
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import System.Environment
+import GHC.Generics
+
+import Types
 
 readSignedObject file = do
 	content <- B.readFile file
@@ -61,18 +62,15 @@ provideClientCert key cert _ = do
 	pure $ Just (CertificateChain [fromRight undefined cert], privkey)
 
 rpc conn method = do
-	let msg = toStrictByteString $ encodeTerm $ TList [TString "rustorion-server-0", TString method, TList []]
+	let msg = BL.toStrict $ pack $ ObjectArray [ObjectStr "rustorion-server-0", ObjectStr method, ObjectArray []]
 	connectionPut conn $ BL.toStrict $ runPut $ putWord32be $ fromIntegral $ B.length msg
 	connectionPut conn msg
 	len <- connectionGetExact conn 4
 	reply <- connectionGetChunk conn
-	let TMap results = snd $ fromRight undefined $ deserialiseFromBytes decodeTerm $ BL.fromStrict reply
+	[ObjectBool rpcSuccess, ObjectBin retVal] <- unpack $ BL.fromStrict reply
 	-- FIXME check success
-	let TBytes payload = fromJust $ lookup (TString "message") results
-	--prelude <- connectionGetExact conn 8
-	--let pp = decode $ BL.fromStrict prelude
-	--connectionGetExact conn $ fromIntegral $ len pp
-	B.putStr payload
+	decRetVal <- unpack $ BL.fromStrict retVal
+	print $ (decRetVal :: UniverseView)
 
 main = do
 	[key, cert] <- getArgs
