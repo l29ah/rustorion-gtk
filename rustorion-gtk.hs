@@ -1,6 +1,6 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 
-import Control.Monad
+import Data.Binary.Get
 import Data.Binary.Put
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
@@ -8,15 +8,13 @@ import Data.Default
 import Data.Either
 import Data.Maybe
 import Data.MessagePack as MP
-import Data.PEM (pemParseBS, pemContent, pemName)
+import Data.PEM (pemParseBS, pemContent)
 import Data.X509 as X509
-import Data.X509.CertificateStore
 import Data.X509.Memory
 import Network.Connection
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import System.Environment
-import GHC.Generics
 
 import Types
 
@@ -66,11 +64,11 @@ rpc conn method = do
 	connectionPut conn $ BL.toStrict $ runPut $ putWord32be $ fromIntegral $ B.length msg
 	connectionPut conn msg
 	len <- connectionGetExact conn 4
-	reply <- connectionGetChunk conn
+	reply <- connectionGetExact conn $ fromIntegral $ runGet getWord32be $ BL.fromStrict len
 	[ObjectBool rpcSuccess, ObjectBin retVal] <- unpack $ BL.fromStrict reply
 	-- FIXME check success
-	decRetVal <- unpack $ BL.fromStrict retVal
-	print $ (decRetVal :: UniverseView)
+	decRetVal :: UniverseView <- unpack $ BL.fromStrict retVal
+	print $ decRetVal
 
 main = do
 	[key, cert] <- getArgs

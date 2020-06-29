@@ -1,8 +1,9 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric, DuplicateRecordFields #-}
 module Types where
 
 import Data.Map
 import Data.MessagePack as MP
+import Data.Text
 import Data.Void
 import Data.Word
 import GHC.Generics
@@ -10,19 +11,63 @@ import GHC.Generics
 newtype ID a = ID Word64 deriving (Show, Eq, Ord, Generic)
 instance MessagePack (ID a)
 
+data Color = Color
+	{ r :: Float
+	, g :: Float
+	, b :: Float
+	} deriving (Show, Eq, Ord, Generic)
+instance MessagePack Color
+
+data UniverseLocation = UniverseLocation
+	{ ulx :: Double
+	, uly :: Double
+	} deriving (Show, Eq, Ord, Generic)
+instance MessagePack UniverseLocation
+
+data Planet = Planet
+	{ uuid :: ID Planet
+	} deriving (Show, Eq, Ord, Generic)
+instance MessagePack Planet
+
+data Empire = Empire
+	{ uuid :: ID Planet
+	, name :: Text
+	, color :: Color
+	} deriving (Show, Eq, Ord, Generic)
+instance MessagePack Empire
+
+data StarSystem = StarSystem
+	{ uuid :: ID StarSystem
+	, name :: Text
+	, location :: UniverseLocation
+	, population :: Word64
+	} deriving (Show, Eq, Ord, Generic)
+instance MessagePack StarSystem
+
+data Ship = Ship
+	{ uuid :: ID Ship
+	, name :: Text
+	} deriving (Show, Eq, Ord, Generic)
+instance MessagePack Ship
+
+data HasMany a b = HasMany
+	{ from :: Map (ID a) ([ID b])
+	, to :: Map (ID b) (ID a)
+	} deriving (Show, Eq, Ord, Generic)
+instance (MessagePack a, MessagePack b) => MessagePack (HasMany a b)
+
 data UniverseView = UniverseView
-	{ planets :: Map (ID Void) Object
-	, star_systems :: Object
-	, current_id :: Object
-	, empires :: Object
-	, planets_in_star_systems :: Object
-	, starlanes :: Object
-	, star_systems_in_empires :: Object
-	, ships :: Object
-	, ships_in_star_systems :: Object
-	, ships_in_empires :: Object
-	, controlled_empire :: Object
+	{ planets :: Map (ID Planet) Planet
+	, star_systems :: Map (ID StarSystem) StarSystem
+	, current_id :: ID Void
+	, empires :: Map (ID Empire) Empire
+	, planets_in_star_systems :: HasMany StarSystem Planet
+	, starlanes :: Map (ID StarSystem) [ID StarSystem]
+	, star_systems_in_empires :: HasMany Empire StarSystem
+	, ships :: Map (ID Ship) Ship
+	, ships_in_star_systems :: HasMany StarSystem Ship
+	, ships_in_empires :: HasMany Empire Ship
+	, controlled_empire :: ID Void
 	, turn_number :: Word
 	} deriving (Show, Eq, Generic)
-
 instance MessagePack UniverseView
