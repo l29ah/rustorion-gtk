@@ -17,7 +17,7 @@ scaleCoord x = round $ (x + 5000) / scaleFactor
 onShipClick ship = print ship
 onStarSystemClick ss = print ss
 
-addShip :: Layout -> UniverseView -> Ship -> IO ()
+addShip :: Fixed -> UniverseView -> Ship -> IO ()
 addShip layout view ship@Ship { name = name, uuid = shid } = do
 	butt <- buttonNewWithLabel $ name
 	set butt [ widgetOpacity := 0.7 ]
@@ -25,15 +25,15 @@ addShip layout view ship@Ship { name = name, uuid = shid } = do
 	let ssid = (to $ ships_in_star_systems view) ! shid
 	let (UniverseLocation x y) = location $ (star_systems view) ! ssid
 	let shipButtonYOffset = 25
-	layoutPut layout butt (scaleCoord x) (shipButtonYOffset + (scaleCoord y))
+	fixedPut layout butt ((scaleCoord x), (shipButtonYOffset + (scaleCoord y)))
 
-addStarSystem :: Layout -> StarSystem -> IO ()
+addStarSystem :: Fixed -> StarSystem -> IO ()
 addStarSystem layout ss@StarSystem {..} = do
 	butt <- buttonNewWithLabel $ name
 	set butt [ widgetOpacity := 0.7 ]
 	on butt buttonActivated $ onStarSystemClick ss
 	let (UniverseLocation x y) = location
-	layoutPut layout butt (scaleCoord x) (scaleCoord y)
+	fixedPut layout butt ((scaleCoord x), (scaleCoord y))
 
 drawLane (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
 	setLineWidth 2
@@ -74,20 +74,23 @@ main = do
 		containerAdd w universeScroll
 
 		-- TODO https://github.com/gtk2hs/gtk2hs/issues/295
-		--viewport <- viewportNew Nothing Nothing
-		--containerAdd universeScroll viewport
+		viewport <- viewportNew Nothing Nothing
+		containerAdd universeScroll viewport
 
 		overlay <- overlayNew
-		--containerAdd viewport overlay
-		containerAdd universeScroll overlay
+		containerAdd viewport overlay
 
 		starlaneLayer <- drawingAreaNew
 		on starlaneLayer draw $ drawLanes view
 		containerAdd overlay starlaneLayer
 
-		layout <- layoutNew Nothing Nothing
+		layout <- fixedNew
 		overlayAdd overlay layout	-- put it over the starlane map
-		layoutSetSize layout (round $ 20000 / scaleFactor) (round $ 20000 / scaleFactor)
+
+		-- make overlay respect the size of the layout
+		sg <- sizeGroupNew SizeGroupBoth
+		sizeGroupAddWidget sg starlaneLayer
+		sizeGroupAddWidget sg layout
 
 		mapM_ (addStarSystem layout) $ M.elems $ star_systems view
 		mapM_ (addShip layout view) $ M.elems $ ships view
