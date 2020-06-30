@@ -14,7 +14,18 @@ import Types
 scaleFactor = 20
 scaleCoord x = round $ (x + 5000) / scaleFactor
 
+onShipClick ship = print ship
 onStarSystemClick ss = print ss
+
+addShip :: Layout -> UniverseView -> Ship -> IO ()
+addShip layout view ship@Ship { name = name, uuid = shid } = do
+	butt <- buttonNewWithLabel $ name
+	set butt [ widgetOpacity := 0.7 ]
+	on butt buttonActivated $ onShipClick ship
+	let ssid = (to $ ships_in_star_systems view) ! shid
+	let (UniverseLocation x y) = location $ (star_systems view) ! ssid
+	let shipButtonYOffset = 25
+	layoutPut layout butt (scaleCoord x) (shipButtonYOffset + (scaleCoord y))
 
 addStarSystem :: Layout -> StarSystem -> IO ()
 addStarSystem layout ss@StarSystem {..} = do
@@ -79,5 +90,6 @@ main = do
 		layoutSetSize layout (round $ 20000 / scaleFactor) (round $ 20000 / scaleFactor)
 
 		mapM_ (addStarSystem layout) $ M.elems $ star_systems view
+		mapM_ (addShip layout view) $ M.elems $ ships view
 
 		widgetShowAll w
