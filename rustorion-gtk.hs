@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, DuplicateRecordFields, RecordWildCards #-}
 
 import Control.Concurrent
+import Data.IORef
 import qualified Data.Map as M
 import Data.Map ((!))
 import Data.Maybe
@@ -10,6 +11,26 @@ import System.Environment
 
 import RPC
 import Types
+
+makeScrollable scroll = do
+	hadj <- scrolledWindowGetHAdjustment scroll
+	vadj <- scrolledWindowGetVAdjustment scroll
+	mousePressCoords <- newIORef (0, 0)
+
+	on scroll motionNotifyEvent $ tryEvent $ do
+		[Button3] <- eventModifierMouse	-- FIXME figure out why it receives all the events regardless of widgetGetEvents output
+		(x, y) <- eventCoordinates
+		(diffx, diffy) <- liftIO $ readIORef mousePressCoords
+		liftIO $ adjustmentSetValue hadj $ diffx - x
+		liftIO $ adjustmentSetValue vadj $ diffy - y
+		eventRequestMotions
+
+	on scroll buttonPressEvent $ tryEvent $ do
+		RightButton <- eventButton
+		adjx <- liftIO $ adjustmentGetValue hadj
+		adjy <- liftIO $ adjustmentGetValue vadj
+		(mx, my) <- eventCoordinates
+		liftIO $ writeIORef mousePressCoords (adjx + mx, adjy + my)
 
 scaleFactor = 20
 scaleCoord x = round $ (x + 5000) / scaleFactor
@@ -70,13 +91,14 @@ main = do
 		windowFullscreen w
 
 		universeScroll <- scrolledWindowNew Nothing Nothing
-		scrolledWindowSetPolicy universeScroll PolicyAutomatic PolicyAutomatic
+		scrolledWindowSetPolicy universeScroll PolicyNever PolicyNever
+		makeScrollable universeScroll
 		containerAdd w universeScroll
 
-		-- TODO https://github.com/gtk2hs/gtk2hs/issues/295
 		viewport <- viewportNew Nothing Nothing
 		containerAdd universeScroll viewport
 
+		-- put interactive items over the galaxy map background
 		overlay <- overlayNew
 		containerAdd viewport overlay
 
