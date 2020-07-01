@@ -90,6 +90,10 @@ main = do
 		unsafeInitGUIForThreadedRTS
 		mainGUI
 	postGUISync $ do
+		-- request a dark theme variant
+		sets <- settingsGetDefault
+		settingsSetLongProperty (fromJust sets) ("gtk-application-prefer-dark-theme" :: String) 1 []
+
 		w <- windowNew
 		set w [windowTitle := ("rustorion-gtk" :: String)]
 
