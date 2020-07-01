@@ -54,7 +54,13 @@ addStarSystem layout ss@StarSystem {..} = do
 	set butt [ widgetOpacity := 0.7 ]
 	on butt buttonActivated $ onStarSystemClick ss
 	let (UniverseLocation x y) = location
+	-- place the buttons in the layout so they can be realized
 	fixedPut layout butt ((scaleCoord x), (scaleCoord y))
+	after butt realize $ do
+		-- center the star system buttons on their locations
+		(Rectangle x y w h) <- widgetGetAllocation butt
+		fixedMove layout butt (x - (w `div` 2), y - (h `div` 2))
+	pure ()
 
 drawLane (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
 	setLineWidth 2
