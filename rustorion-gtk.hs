@@ -109,12 +109,9 @@ main = do
 		makeScrollable universeScroll
 		containerAdd w universeScroll
 
-		viewport <- viewportNew Nothing Nothing
-		containerAdd universeScroll viewport
-
 		-- put interactive items over the galaxy map background
 		overlay <- overlayNew
-		containerAdd viewport overlay
+		scrolledWindowAddWithViewport universeScroll overlay
 
 		starlaneLayer <- drawingAreaNew
 		on starlaneLayer draw $ drawLanes view
