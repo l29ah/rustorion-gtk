@@ -64,6 +64,10 @@ drawLane (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
 	stroke
 
 drawLanes UniverseView {..} = do
+	-- black interstellar space
+	setSourceRGB 0 0 0
+	paint
+
 	mapM_ (\(id1, ids) -> mapM_ (\id2 ->
 				drawLane (location $ star_systems ! id1) (location $ star_systems ! id2)
 			) ids
