@@ -8,6 +8,7 @@ import Data.Maybe
 import Graphics.Rendering.Cairo
 import Graphics.UI.Gtk
 import System.Environment
+import System.Exit
 
 import RPC
 import Types
@@ -100,6 +101,7 @@ main = do
 		y <- screenGetHeight scr
 		windowSetDefaultSize w x y
 		windowFullscreen w
+		on w deleteEvent $ liftIO $ exitWith ExitSuccess
 
 		panels <- vPanedNew
 		containerAdd w panels
