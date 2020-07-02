@@ -35,24 +35,21 @@ makeScrollable scroll = do
 scaleFactor = 20
 scaleCoord x = round $ (x + 5000) / scaleFactor
 
-onShipClick ship = print ship
-onStarSystemClick ss = print ss
-
-addShip :: Fixed -> UniverseView -> Ship -> IO ()
-addShip layout view ship@Ship { name = name, uuid = shid } = do
+addShip :: Fixed -> UniverseView -> (Ship -> IO ()) -> Ship -> IO ()
+addShip layout view onClick ship@Ship { name = name, uuid = shid } = do
 	butt <- buttonNewWithLabel $ name
 	set butt [ widgetOpacity := 0.7 ]
-	on butt buttonActivated $ onShipClick ship
+	on butt buttonActivated $ onClick ship
 	let ssid = (to $ ships_in_star_systems view) ! shid
 	let (UniverseLocation x y) = location $ (star_systems view) ! ssid
 	let shipButtonYOffset = 25
 	fixedPut layout butt ((scaleCoord x), (shipButtonYOffset + (scaleCoord y)))
 
-addStarSystem :: Fixed -> StarSystem -> IO ()
-addStarSystem layout ss@StarSystem {..} = do
+addStarSystem :: Fixed -> (StarSystem -> IO ()) -> StarSystem -> IO ()
+addStarSystem layout onClick ss@StarSystem {..} = do
 	butt <- buttonNewWithLabel $ name
 	set butt [ widgetOpacity := 0.7 ]
-	on butt buttonActivated $ onStarSystemClick ss
+	on butt buttonActivated $ onClick ss
 	let (UniverseLocation x y) = location
 	-- place the buttons in the layout so they can be realized
 	fixedPut layout butt ((scaleCoord x), (scaleCoord y))
@@ -104,10 +101,17 @@ main = do
 		windowSetDefaultSize w x y
 		windowFullscreen w
 
+		panels <- vPanedNew
+		containerAdd w panels
+
+		infoLabel <- labelNew (Nothing :: Maybe String)
+		labelSetLineWrap infoLabel True
+		panedPack2 panels infoLabel False False
+
 		universeScroll <- scrolledWindowNew Nothing Nothing
-		scrolledWindowSetPolicy universeScroll PolicyNever PolicyNever
+		scrolledWindowSetPolicy universeScroll PolicyAutomatic PolicyAutomatic
 		makeScrollable universeScroll
-		containerAdd w universeScroll
+		panedPack1 panels universeScroll True True
 
 		-- put interactive items over the galaxy map background
 		overlay <- overlayNew
@@ -125,7 +129,7 @@ main = do
 		sizeGroupAddWidget sg starlaneLayer
 		sizeGroupAddWidget sg layout
 
-		mapM_ (addStarSystem layout) $ M.elems $ star_systems view
-		mapM_ (addShip layout view) $ M.elems $ ships view
+		mapM_ (addStarSystem layout (labelSetText infoLabel . show)) $ M.elems $ star_systems view
+		mapM_ (addShip layout view (labelSetText infoLabel . show)) $ M.elems $ ships view
 
 		widgetShowAll w
