@@ -23,10 +23,12 @@ import Network.TLS.Extra.Cipher
 
 import Types
 
+readSignedObject :: FilePath -> IO [Either String (SignedExact Certificate)]
 readSignedObject file = do
 	content <- B.readFile file
 	return $ either error (map (X509.decodeSignedObject . pemContent)) $ pemParseBS content
 
+readCert :: FilePath -> IO (Either String (SignedExact Certificate))
 readCert fn = do
 	objs <- readSignedObject fn
 	pure $ head objs
@@ -47,7 +49,7 @@ provideClientCert :: FilePath -> FilePath -> ([CertificateType], Maybe [HashAndS
 provideClientCert key cert _ = do
 	privkey <- readKey key
 	cert <- readCert cert
-	pure $ Just (CertificateChain [fromRight undefined cert], privkey)
+	pure $ Just (CertificateChain [fromRight (error "no certificate in the supplied PEM file") cert], privkey)
 
 rpc conn method = do
 	let msg = BL.toStrict $ pack $ ObjectArray [ObjectStr "rustorion-server-0", ObjectStr method, ObjectArray []]
