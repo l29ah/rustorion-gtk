@@ -15,7 +15,7 @@ executable rustorion-gtk
   main-is:             rustorion-gtk.hs
   ghc-options:         -W -fno-warn-tabs
   -- other-modules:
-  build-depends:       base >=4.12 && <4.13,
+  build-depends:       base >= 4.12 && < 4.15,
                        msgpack-binary >=0.0 && <0.1,
                        msgpack-types ^>= 0,
                        binary ^>= 0.8,
