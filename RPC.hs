@@ -2,6 +2,7 @@
 module RPC
 	( rpcConnect
 	, getView
+	, setActions
 	) where
 
 import Control.Monad
@@ -52,7 +53,7 @@ provideClientCert key cert _ = do
 	pure $ Just (CertificateChain [fromRight (error "no certificate in the supplied PEM file") cert], privkey)
 
 rpc conn method = do
-	let msg = BL.toStrict $ pack $ ObjectArray [ObjectStr "rustorion-server-0", ObjectStr method, ObjectArray []]
+	let msg = BL.toStrict $ pack $ ObjectArray [ObjectStr "rustorion-server-0", ObjectStr method, ObjectBin $ toStrict $ pack $ ObjectArray []]
 	connectionPut conn $ BL.toStrict $ runPut $ putWord32be $ fromIntegral $ B.length msg
 	connectionPut conn msg
 	len <- connectionGetExact conn 4
@@ -63,6 +64,9 @@ rpc conn method = do
 
 getView :: Connection -> IO UniverseView
 getView conn = rpc conn "get_view" >>= unpack . BL.fromStrict
+
+setActions :: Connection -> [Action] -> IO ()
+setActions conn acts = rpc conn "set_actions" >> pure ()
 
 rpcConnect host port key cert = do
 	ctx <- initConnectionContext
