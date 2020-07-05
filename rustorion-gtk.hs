@@ -103,8 +103,23 @@ main = do
 		windowFullscreen w
 		on w deleteEvent $ liftIO $ exitWith ExitSuccess
 
+		topPaned <- vPanedNew
+		containerAdd w topPaned
+
+		topPanel <- hBoxNew False 0
+		panedPack1 topPaned topPanel False False
+
+		turnLabel <- labelNew $ Just ("Turn " ++ (show $ turn_number view))
+		boxPackStart topPanel turnLabel PackNatural 0
+
+		readyButton <- checkButtonNewWithLabel ("Ready" :: String)
+		boxPackStart topPanel readyButton PackNatural 0
+		on readyButton buttonActivated $ do
+			setActions conn []
+			pure ()
+
 		panels <- vPanedNew
-		containerAdd w panels
+		panedPack2 topPaned panels True True
 
 		infoLabel <- labelNew (Nothing :: Maybe String)
 		labelSetLineWrap infoLabel True

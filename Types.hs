@@ -71,3 +71,9 @@ data UniverseView = UniverseView
 	, turn_number :: Word
 	} deriving (Show, Eq, Generic)
 instance MessagePack UniverseView
+
+data Action =
+	CaptureStarSystem (ID StarSystem) (ID Empire) |
+	MoveShip (ID Ship) (ID StarSystem)
+	deriving (Show, Eq, Generic)
+instance MessagePack Action
