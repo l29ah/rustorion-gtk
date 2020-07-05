@@ -76,4 +76,6 @@ data Action =
 	CaptureStarSystem (ID StarSystem) (ID Empire) |
 	MoveShip (ID Ship) (ID StarSystem)
 	deriving (Show, Eq, Generic)
-instance MessagePack Action
+instance MessagePack Action where
+	toObject (CaptureStarSystem id1 id2) = ObjectMap [(ObjectInt 0, ObjectArray [toObject id1, toObject id2])]
+	toObject (MoveShip id1 id2) = ObjectMap [(ObjectInt 0, ObjectArray [toObject id1, toObject id2])]

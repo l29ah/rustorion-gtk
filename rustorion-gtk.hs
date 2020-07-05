@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, DuplicateRecordFields, RecordWildCards #-}
 
 import Control.Concurrent
+import Control.Monad
+import Data.Function ((&))
 import Data.IORef
 import qualified Data.Map as M
 import Data.Map ((!))
@@ -112,11 +114,24 @@ main = do
 		turnLabel <- labelNew $ Just ("Turn " ++ (show $ turn_number view))
 		boxPackStart topPanel turnLabel PackNatural 0
 
-		readyButton <- checkButtonNewWithLabel ("Ready" :: String)
+		readyButton <- checkButtonNew
+		readyButtonLabel <- labelNew $ Just ("Ready" :: String)
+		containerAdd readyButton readyButtonLabel
 		boxPackStart topPanel readyButton PackNatural 0
 		on readyButton buttonActivated $ do
-			setActions conn []
-			pure ()
+			gotReady <- toggleButtonGetActive readyButton
+			readyToAct <- widgetGetSensitive readyButton
+			when (gotReady && readyToAct) $ do
+				readyButton & widgetSetSensitive $ False
+				labelSetText readyButtonLabel ("sending..." :: String)
+				readyButton & toggleButtonSetActive $ False
+				toggleButtonSetInconsistent readyButton True
+				setActions conn []
+				-- after successful action submission
+				toggleButtonSetInconsistent readyButton False
+				labelSetText readyButtonLabel ("Ready" :: String)
+				readyButton & toggleButtonSetActive $ True
+				readyButton & widgetSetSensitive $ True
 
 		panels <- vPanedNew
 		panedPack2 topPaned panels True True
