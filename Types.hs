@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric, DuplicateRecordFields #-}
 module Types where
 
+import Data.Default
 import Data.Map
 import Data.MessagePack as MP
 import Data.Text
@@ -79,3 +80,8 @@ data Action =
 instance MessagePack Action where
 	toObject (CaptureStarSystem id1 id2) = ObjectMap [(ObjectInt 0, ObjectArray [toObject id1, toObject id2])]
 	toObject (MoveShip id1 id2) = ObjectMap [(ObjectInt 0, ObjectArray [toObject id1, toObject id2])]
+
+data UIState = UIState
+	{ galaxyDisplayOffsets :: (Double, Double)
+	} deriving (Show, Eq, Generic)
+instance Default UIState

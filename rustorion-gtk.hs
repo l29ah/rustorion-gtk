@@ -1,7 +1,10 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, DuplicateRecordFields, RecordWildCards #-}
 
 import Control.Concurrent
+import Control.Concurrent.STM
 import Control.Monad
+import Control.Monad.Trans.Reader
+import Data.Default
 import Data.Function ((&))
 import Data.IORef
 import qualified Data.Map as M
@@ -36,46 +39,52 @@ makeScrollable scroll = do
 		liftIO $ writeIORef mousePressCoords (adjx + mx, adjy + my)
 
 scaleFactor = 20
-scaleCoord x = round $ (x + 5000) / scaleFactor
+scaleCoord x = 100 + (round $ x / scaleFactor)
 
-addShip :: Fixed -> UniverseView -> (Ship -> IO ()) -> Ship -> IO ()
-addShip layout view onClick ship@Ship { name = name, uuid = shid } = do
+addShip :: TVar UIState -> Fixed -> UniverseView -> (Ship -> IO ()) -> Ship -> IO ()
+addShip uiState layout view onClick ship@Ship { name = name, uuid = shid } = do
+	UIState {..} <- readTVarIO uiState
 	butt <- buttonNewWithLabel $ name
 	set butt [ widgetOpacity := 0.7 ]
 	on butt buttonActivated $ onClick ship
 	let ssid = (to $ ships_in_star_systems view) ! shid
 	let (UniverseLocation x y) = location $ (star_systems view) ! ssid
 	let shipButtonYOffset = 25
-	fixedPut layout butt ((scaleCoord x), (shipButtonYOffset + (scaleCoord y)))
+	fixedPut layout butt ((scaleCoord $ x - fst galaxyDisplayOffsets), (shipButtonYOffset + (scaleCoord $ y - snd galaxyDisplayOffsets)))
 
-addStarSystem :: Fixed -> (StarSystem -> IO ()) -> StarSystem -> IO ()
-addStarSystem layout onClick ss@StarSystem {..} = do
+addStarSystem :: Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> StarSystem -> IO ()
+addStarSystem layout onClick (xoff, yoff) ss@StarSystem {..} = do
 	butt <- buttonNewWithLabel $ name
 	set butt [ widgetOpacity := 0.7 ]
 	on butt buttonActivated $ onClick ss
 	let (UniverseLocation x y) = location
 	-- place the buttons in the layout so they can be realized
-	fixedPut layout butt ((scaleCoord x), (scaleCoord y))
+	fixedPut layout butt ((scaleCoord $ x - xoff), (scaleCoord $ y - yoff))
 	after butt realize $ do
 		-- center the star system buttons on their locations
 		(Rectangle x y w h) <- widgetGetAllocation butt
 		fixedMove layout butt (x - (w `div` 2), y - (h `div` 2))
 	pure ()
 
-drawLane (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
+addStarSystems uiState layout onClick systems = do
+	let offsets = (minimum $ map (ulx . location) systems, minimum $ map (uly . location) systems)
+	atomically $ modifyTVar uiState $ \s -> s { galaxyDisplayOffsets = offsets }
+	mapM_ (addStarSystem layout onClick offsets) systems
+
+drawLane (xoff, yoff) (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
 	setLineWidth 2
 	setSourceRGB 0 1 0
-	moveTo (fromIntegral $ scaleCoord x1) (fromIntegral $ scaleCoord y1)
-	lineTo (fromIntegral $ scaleCoord x2) (fromIntegral $ scaleCoord y2)
+	moveTo (fromIntegral $ scaleCoord $ x1 - xoff) (fromIntegral $ scaleCoord $ y1 - yoff)
+	lineTo (fromIntegral $ scaleCoord $ x2 - xoff) (fromIntegral $ scaleCoord $ y2 - yoff)
 	stroke
 
-drawLanes UniverseView {..} = do
+drawLanes offsets UniverseView {..} = do
 	-- black interstellar space
 	setSourceRGB 0 0 0
 	paint
 
 	mapM_ (\(id1, ids) -> mapM_ (\id2 ->
-				drawLane (location $ star_systems ! id1) (location $ star_systems ! id2)
+				drawLane offsets (location $ star_systems ! id1) (location $ star_systems ! id2)
 			) ids
 		) $ M.toList starlanes
 
@@ -86,6 +95,7 @@ main = do
 	conn <- rpcConnect host port key cert
 	view <- getView conn
 	print view
+	uiState <- newTVarIO $ UIState def
 	forkIO $ do
 		unsafeInitGUIForThreadedRTS
 		mainGUI
@@ -150,7 +160,6 @@ main = do
 		scrolledWindowAddWithViewport universeScroll overlay
 
 		starlaneLayer <- drawingAreaNew
-		on starlaneLayer draw $ drawLanes view
 		containerAdd overlay starlaneLayer
 
 		layout <- fixedNew
@@ -161,7 +170,10 @@ main = do
 		sizeGroupAddWidget sg starlaneLayer
 		sizeGroupAddWidget sg layout
 
-		mapM_ (addStarSystem layout (labelSetText infoLabel . show)) $ M.elems $ star_systems view
-		mapM_ (addShip layout view (labelSetText infoLabel . show)) $ M.elems $ ships view
+		-- draw our view content
+		addStarSystems uiState layout (labelSetText infoLabel . show) $ M.elems $ star_systems view
+		mapM_ (addShip uiState layout view (labelSetText infoLabel . show)) $ M.elems $ ships view
+		UIState { galaxyDisplayOffsets = offsets } <- readTVarIO uiState
+		on starlaneLayer draw $ drawLanes offsets view
 
 		widgetShowAll w
