@@ -3,7 +3,6 @@
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad
-import Control.Monad.Trans.Reader
 import Data.Default
 import Data.Function ((&))
 import Data.IORef
@@ -11,12 +10,15 @@ import qualified Data.Map as M
 import Data.Map ((!))
 import Data.Maybe
 import Graphics.Rendering.Cairo
-import Graphics.UI.Gtk
+import Graphics.UI.Gtk as GTK
 import System.Environment
 import System.Exit
 
 import RPC
 import Types
+
+toColor :: Types.Color -> GTK.Color
+toColor (Types.Color r g b) = GTK.Color (round $ r * 65535) (round $ g * 65535) (round $ b * 65535)
 
 makeScrollable scroll = do
 	hadj <- scrolledWindowGetHAdjustment scroll
@@ -52,22 +54,29 @@ addShip uiState layout view onClick ship@Ship { name = name, uuid = shid } = do
 	let shipButtonYOffset = 25
 	fixedPut layout butt ((scaleCoord $ x - fst galaxyDisplayOffsets), (shipButtonYOffset + (scaleCoord $ y - snd galaxyDisplayOffsets)))
 
-addStarSystem :: Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> StarSystem -> IO ()
-addStarSystem layout onClick (xoff, yoff) ss@StarSystem {..} = do
+addStarSystem :: Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> (Empire, StarSystem) -> IO ()
+addStarSystem layout onClick (xoff, yoff) (empire, ss@StarSystem {..}) = do
 	butt <- buttonNewWithLabel $ name
+	containerSetBorderWidth butt 1
+	-- https://stackoverflow.com/questions/5812113/pygtk-change-a-widgets-border-color
+	buttBordered <- eventBoxNew
+	containerAdd buttBordered butt
+	-- set the star system border color to the empire color and make it transparent
+	widgetModifyBg buttBordered StateNormal $ toColor $ color empire
 	set butt [ widgetOpacity := 0.7 ]
+
 	on butt buttonActivated $ onClick ss
 	let (UniverseLocation x y) = location
 	-- place the buttons in the layout so they can be realized
-	fixedPut layout butt ((scaleCoord $ x - xoff), (scaleCoord $ y - yoff))
+	fixedPut layout buttBordered ((scaleCoord $ x - xoff), (scaleCoord $ y - yoff))
 	after butt realize $ do
 		-- center the star system buttons on their locations
-		(Rectangle x y w h) <- widgetGetAllocation butt
-		fixedMove layout butt (x - (w `div` 2), y - (h `div` 2))
+		(Rectangle x y w h) <- widgetGetAllocation buttBordered
+		fixedMove layout buttBordered (x - (w `div` 2), y - (h `div` 2))
 	pure ()
 
 addStarSystems uiState layout onClick systems = do
-	let offsets = (minimum $ map (ulx . location) systems, minimum $ map (uly . location) systems)
+	let offsets = (minimum $ map (ulx . location . snd) systems, minimum $ map (uly . location . snd) systems)
 	atomically $ modifyTVar uiState $ \s -> s { galaxyDisplayOffsets = offsets }
 	mapM_ (addStarSystem layout onClick offsets) systems
 
@@ -87,6 +96,11 @@ drawLanes offsets UniverseView {..} = do
 				drawLane offsets (location $ star_systems ! id1) (location $ star_systems ! id2)
 			) ids
 		) $ M.toList starlanes
+
+annotateStarSystems UniverseView {..} = M.fromList $ map (\(id, ss) ->
+		let empire = empires ! ((to star_systems_in_empires) ! id) in
+		(id, (empire, ss))
+	) $ M.toList $ star_systems
 
 main = do
 	[key, cert] <- getArgs
@@ -170,8 +184,11 @@ main = do
 		sizeGroupAddWidget sg starlaneLayer
 		sizeGroupAddWidget sg layout
 
+		-- cache the information about star system ownership
+		let annotatedStarSystems = annotateStarSystems view
+
 		-- draw our view content
-		addStarSystems uiState layout (labelSetText infoLabel . show) $ M.elems $ star_systems view
+		addStarSystems uiState layout (labelSetText infoLabel . show) $ M.elems $ annotatedStarSystems
 		mapM_ (addShip uiState layout view (labelSetText infoLabel . show)) $ M.elems $ ships view
 		UIState { galaxyDisplayOffsets = offsets } <- readTVarIO uiState
 		on starlaneLayer draw $ drawLanes offsets view
