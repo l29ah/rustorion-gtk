@@ -12,7 +12,6 @@ import Data.Maybe
 import Graphics.Rendering.Cairo
 import Graphics.UI.Gtk as GTK
 import System.Directory
-import System.Environment
 import System.Exit
 
 import CertGen
@@ -213,8 +212,8 @@ handleNewTurn conn windowRef = do
 		widgetShowAll w
 
 main = do
-	unsafeInitGUIForThreadedRTS
-	[key, cert] <- getArgs
+	-- getArgs
+	[key, cert] <- unsafeInitGUIForThreadedRTS
 	missingAuthData <- fmap (not . and) $ sequence $ map doesFileExist [key, cert]
 	when missingAuthData $ makeKeyCert key cert
 	let host = "localhost"
