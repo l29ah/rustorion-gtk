@@ -40,4 +40,6 @@ executable rustorion-gtk
                        asn1-encoding ^>= 0.9.6,
                        asn1-types ^>= 0.3.4,
                        directory ^>= 1.3,
+                       sdl2 ^>= 2.5.1,
+                       sdl2-mixer ^>= 1.1,
   default-language:    Haskell2010

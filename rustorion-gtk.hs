@@ -11,6 +11,8 @@ import Data.Map ((!))
 import Data.Maybe
 import Graphics.Rendering.Cairo
 import Graphics.UI.Gtk as GTK
+import SDL.Init
+import SDL.Mixer
 import System.Directory
 import System.Exit
 
@@ -116,6 +118,8 @@ turnWaiter host key cert = do
 	forever $ do
 		rpcHandle backconn
 		-- assume it's a turn change
+		newTurnSound <- load "newturn.ogg"
+		play newTurnSound
 		handleNewTurn conn windowRef
 
 makeWindow = do
@@ -216,6 +220,12 @@ main = do
 	[key, cert] <- unsafeInitGUIForThreadedRTS
 	missingAuthData <- fmap (not . and) $ sequence $ map doesFileExist [key, cert]
 	when missingAuthData $ makeKeyCert key cert
+
+	SDL.Init.initialize [InitAudio]
+	-- 22050Hz by default, seriously!?
+	let audio = def { audioFrequency = max 44100 $ audioFrequency def }
+	openAudio audio 16384
+
 	let host = "localhost"
 	forkIO $ turnWaiter host key cert
 	mainGUI
