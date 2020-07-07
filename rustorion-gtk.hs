@@ -106,8 +106,8 @@ turnWaiter host key cert = do
 	-- first we get the current turn data and utilize it
 	let port = 4433
 	conn <- rpcConnect host port key cert
-	w <- makeWindow
-	handleNewTurn conn w
+	windowRef <- newIORef =<< makeWindow
+	handleNewTurn conn windowRef
 
 	-- then we're waiting for the next turns and handle them
 	let backconnect_port = 4434
@@ -115,7 +115,7 @@ turnWaiter host key cert = do
 	forever $ do
 		rpcHandle backconn
 		-- assume it's a turn change
-		handleNewTurn conn w
+		handleNewTurn conn windowRef
 
 makeWindow = do
 	-- request a dark theme variant
@@ -134,14 +134,15 @@ makeWindow = do
 	on w deleteEvent $ liftIO $ exitWith ExitSuccess
 	pure w
 
-handleNewTurn conn w = do
+handleNewTurn conn windowRef = do
 	view <- getView conn
 	print view
 	uiState <- newTVarIO def
 	postGUISync $ do
-		-- purge the old window contents, if any
-		oldStuff <- fmap maybeToList $ binGetChild w
-		mapM_ widgetDestroy oldStuff
+		-- purge the old window
+		readIORef windowRef >>= widgetDestroy
+		w <- makeWindow
+		writeIORef windowRef w
 
 		topPaned <- vPanedNew
 		containerAdd w topPaned
