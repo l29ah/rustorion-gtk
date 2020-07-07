@@ -11,9 +11,11 @@ import Data.Map ((!))
 import Data.Maybe
 import Graphics.Rendering.Cairo
 import Graphics.UI.Gtk as GTK
+import System.Directory
 import System.Environment
 import System.Exit
 
+import CertGen
 import RPC
 import Types
 
@@ -213,6 +215,8 @@ handleNewTurn conn windowRef = do
 main = do
 	unsafeInitGUIForThreadedRTS
 	[key, cert] <- getArgs
+	missingAuthData <- fmap (not . and) $ sequence $ map doesFileExist [key, cert]
+	when missingAuthData $ makeKeyCert key cert
 	let host = "localhost"
 	forkIO $ turnWaiter host key cert
 	mainGUI
