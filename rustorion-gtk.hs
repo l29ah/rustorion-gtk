@@ -102,32 +102,46 @@ annotateStarSystems UniverseView {..} = M.fromList $ map (\(id, ss) ->
 		(id, (empire, ss))
 	) $ M.toList $ star_systems
 
-main = do
-	[key, cert] <- getArgs
-	let host = "localhost"
+turnWaiter host key cert = do
+	-- first we get the current turn data and utilize it
 	let port = 4433
 	conn <- rpcConnect host port key cert
+	w <- makeWindow
+	handleNewTurn conn w
+
+	-- then we're waiting for the next turns and handle them
+	let backconnect_port = 4434
+	backconn <- rpcConnect host backconnect_port key cert
+	forever $ do
+		rpcHandle backconn
+		-- assume it's a turn change
+		handleNewTurn conn w
+
+makeWindow = do
+	-- request a dark theme variant
+	sets <- settingsGetDefault
+	settingsSetLongProperty (fromJust sets) ("gtk-application-prefer-dark-theme" :: String) 1 []
+
+	w <- windowNew
+	set w [windowTitle := ("rustorion-gtk" :: String)]
+
+	-- or better https://askubuntu.com/questions/153549/how-to-detect-a-computers-physical-screen-size-in-gtk
+	scr <- fmap fromJust screenGetDefault
+	x <- screenGetWidth scr
+	y <- screenGetHeight scr
+	windowSetDefaultSize w x y
+	windowFullscreen w
+	on w deleteEvent $ liftIO $ exitWith ExitSuccess
+	pure w
+
+handleNewTurn conn w = do
 	view <- getView conn
 	print view
-	uiState <- newTVarIO $ UIState def
-	forkIO $ do
-		unsafeInitGUIForThreadedRTS
-		mainGUI
+	uiState <- newTVarIO def
 	postGUISync $ do
-		-- request a dark theme variant
-		sets <- settingsGetDefault
-		settingsSetLongProperty (fromJust sets) ("gtk-application-prefer-dark-theme" :: String) 1 []
-
-		w <- windowNew
-		set w [windowTitle := ("rustorion-gtk" :: String)]
-
-		-- or better https://askubuntu.com/questions/153549/how-to-detect-a-computers-physical-screen-size-in-gtk
-		scr <- fmap fromJust screenGetDefault
-		x <- screenGetWidth scr
-		y <- screenGetHeight scr
-		windowSetDefaultSize w x y
-		windowFullscreen w
-		on w deleteEvent $ liftIO $ exitWith ExitSuccess
+		-- purge the old window contents, if any
+		oldStuff <- fmap maybeToList $ binGetChild w
+		mapM_ widgetDestroy oldStuff
 
 		topPaned <- vPanedNew
 		containerAdd w topPaned
@@ -194,3 +208,10 @@ main = do
 		on starlaneLayer draw $ drawLanes offsets view
 
 		widgetShowAll w
+
+main = do
+	unsafeInitGUIForThreadedRTS
+	[key, cert] <- getArgs
+	let host = "localhost"
+	forkIO $ turnWaiter host key cert
+	mainGUI

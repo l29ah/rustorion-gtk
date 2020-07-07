@@ -13,7 +13,7 @@ build-type:          Simple
 
 executable rustorion-gtk
   main-is:             rustorion-gtk.hs
-  ghc-options:         -W -fno-warn-tabs
+  ghc-options:         -W -fno-warn-tabs -threaded
   other-modules:
                        RPC
                        Types

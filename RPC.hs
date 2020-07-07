@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 module RPC
 	( rpcConnect
+	, rpcHandle
 	, getView
 	, setActions
 	) where
 
+import Control.Concurrent.MVar
 import Control.Monad
 import Data.Binary.Get
 import Data.Binary.Put
@@ -52,22 +54,41 @@ provideClientCert key cert _ = do
 	cert <- readCert cert
 	pure $ Just (CertificateChain [fromRight (error "no certificate in the supplied PEM file") cert], privkey)
 
-rpc :: (MessagePack a) => Connection -> T.Text -> a -> IO B.ByteString
-rpc conn method args = do
-	let msg = BL.toStrict $ pack $ ObjectArray [ObjectStr "rustorion-server-0", ObjectStr method, ObjectBin $ BL.toStrict $ pack args]
+recvMessage :: Connection -> IO B.ByteString
+recvMessage conn = do
+	len <- connectionGetExact conn 4
+	connectionGetExact conn $ fromIntegral $ runGet getWord32be $ BL.fromStrict len
+
+sendMessage :: Connection -> B.ByteString -> IO ()
+sendMessage conn msg = do
 	connectionPut conn $ BL.toStrict $ runPut $ putWord32be $ fromIntegral $ B.length msg
 	connectionPut conn msg
-	len <- connectionGetExact conn 4
-	reply <- connectionGetExact conn $ fromIntegral $ runGet getWord32be $ BL.fromStrict len
+	
+
+-- we call the server's methods
+rpc :: (MessagePack a) => MVar Connection -> T.Text -> a -> IO B.ByteString
+rpc connM method args = withMVar connM $ \conn -> do
+	let msg = BL.toStrict $ pack $ ObjectArray [ObjectStr "rustorion-server-0", ObjectStr method, ObjectBin $ BL.toStrict $ pack args]
+	sendMessage conn msg
+	reply <- recvMessage conn
 	[ObjectBool rpcSuccess, ObjectBin retVal] <- unpack $ BL.fromStrict reply
 	when (rpcSuccess == False) $ fail $ "rpc failed calling " ++ T.unpack method
 	pure retVal
 
-getView :: Connection -> IO UniverseView
+-- server calling our methods over a backconn
+rpcHandle :: MVar Connection -> IO ()
+rpcHandle connM = withMVar connM $ \conn -> do
+	req <- recvMessage conn
+	parsedReq <- (unpack $ BL.fromStrict req) :: IO Object
+	print parsedReq
+	-- send a bogus reply
+	sendMessage conn $ BL.toStrict $ pack [ObjectBool True, ObjectBin ""]
+
+getView :: MVar Connection -> IO UniverseView
 getView conn = rpc conn "get_view" () >>= unpack . BL.fromStrict
 
-setActions :: Connection -> [Action] -> IO ()
-setActions conn acts = rpc conn "set_actions" acts >> pure ()
+setActions :: MVar Connection -> [Action] -> IO ()
+setActions conn acts = rpc conn "set_actions" acts >>= print
 
 rpcConnect host port key cert = do
 	ctx <- initConnectionContext
@@ -80,4 +101,5 @@ rpcConnect host port key cert = do
 			}
 		}
 	let tls = Just $ TLSSettings tlsClientParams
-	connectTo ctx $ ConnectionParams host port tls Nothing
+	conn <- connectTo ctx $ ConnectionParams host port tls Nothing
+	newMVar conn
