@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric, DuplicateRecordFields #-}
+{-# LANGUAGE DeriveGeneric, DuplicateRecordFields, FlexibleInstances #-}
 module Types where
 
 import Data.Default
@@ -30,10 +30,15 @@ data Planet = Planet
 	} deriving (Show, Eq, Ord, Generic)
 instance MessagePack Planet
 
+instance {-# OVERLAPPING #-} MessagePack (Maybe (ID a)) where
+	fromObject ObjectNil = pure Nothing
+	fromObject x = fromObject x >>= pure . Just
+
 data Empire = Empire
 	{ uuid :: ID Planet
 	, name :: Text
 	, color :: Color
+	, capital :: Maybe (ID StarSystem)
 	} deriving (Show, Eq, Ord, Generic)
 instance MessagePack Empire
 
