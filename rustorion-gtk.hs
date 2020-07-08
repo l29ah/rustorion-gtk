@@ -109,7 +109,7 @@ turnWaiter host key cert = do
 	-- first we get the current turn data and utilize it
 	let port = 4433
 	conn <- rpcConnect host port key cert
-	windowRef <- newIORef =<< postGUISync makeWindow
+	windowRef <- newIORef =<< postGUISync windowNew
 	handleNewTurn conn windowRef
 
 	-- then we're waiting for the next turns and handle them
