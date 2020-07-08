@@ -122,10 +122,6 @@ turnWaiter host key cert = do
 		handleNewTurn conn windowRef
 
 makeWindow = do
-	-- request a dark theme variant
-	sets <- settingsGetDefault
-	settingsSetLongProperty (fromJust sets) ("gtk-application-prefer-dark-theme" :: String) 1 []
-
 	w <- windowNew
 	set w [windowTitle := ("rustorion-gtk" :: String)]
 
@@ -224,6 +220,10 @@ main = do
 	-- 22050Hz by default, seriously!?
 	let audio = def { audioFrequency = max 44100 $ audioFrequency def }
 	openAudio audio 16384
+
+	-- request a dark theme variant
+	sets <- settingsGetDefault
+	settingsSetLongProperty (fromJust sets) ("gtk-application-prefer-dark-theme" :: String) 1 []
 
 	let host = "localhost"
 	forkIO $ turnWaiter host key cert
