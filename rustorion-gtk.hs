@@ -118,7 +118,7 @@ turnWaiter host key cert = do
 	forever $ do
 		rpcHandle backconn
 		-- assume it's a turn change
-		forkIO $ load "newturn.ogg" >>= play
+		forkIO $ load "resources/newturn.ogg" >>= play
 		handleNewTurn conn windowRef
 
 makeWindow = do
