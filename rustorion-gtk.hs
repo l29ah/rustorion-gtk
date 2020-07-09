@@ -69,12 +69,7 @@ addStarSystem layout onClick (xoff, yoff) (empire, ss@StarSystem {..}) = do
 	set butt [ widgetOpacity := 0.7 ]
 
 	mapM (\cap -> when (cap == uuid) $ do
-			print ss
-			--capitalImage <- imageNewFromFile "resources/crown.svg"
-			--imageSetPixelSize capitalImage 10
-			--capitalImage <- imageNewFromIconName ("crown" :: String) IconSizeButton
-			capitalPix <- pixbufNewFromFileAtSize ("resources/crown.svg" :: String) 32 32
-			capitalImage <- imageNewFromPixbuf capitalPix
+			capitalImage <- imageNewFromIconName ("crown" :: String) IconSizeButton
 			buttonSetImage butt capitalImage
 		) $ maybeToList $ capital empire
 
@@ -238,26 +233,8 @@ main = do
 	settingsSetLongProperty sets ("gtk-button-images" :: String) 1 []
 
 	-- tell gtk where to look for icons
-	-- icon theme search path is broken
-	--iconTheme <- iconThemeGetDefault
-	----iconThemePrependSearchPath iconTheme "resources"
-	--sp <- iconThemeGetSearchPath iconTheme
-	--print sp
-
-	-- it won't scale afterwards
-	--crownPix <- imageNewFromFile "resources/crown.svg"
-	--iconThemeAddBuiltinIcon ("crown" :: String) 1000 =<< imageGetPixbuf crownPix
-
-	-- icon stock is deprecated and doesn't work with my svg
-	--let addIcon ifac fn = do
-	--	isource <- iconSourceNew
-	--	iconSourceSetFilename isource fn
-	--	iset <- iconSetNew
-	--	iconSetAddSource iset isource
-	--	iconFactoryAdd ifac (T.pack $ fromJust $ stripPrefix "resources/" fn) iset
-	--iconFac <- iconFactoryNew
-	--addIcon iconFac "resources/crown.svg"
-	--iconFactoryAddDefault iconFac
+	iconTheme <- iconThemeGetDefault
+	iconThemePrependSearchPath iconTheme "resources"
 
 	let host = "localhost"
 	forkIO $ turnWaiter host key cert
