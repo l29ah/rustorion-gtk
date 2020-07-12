@@ -51,6 +51,8 @@ addShip uiState layout view onClick ship@Ship { name = name, uuid = shid } = do
 	UIState {..} <- readTVarIO uiState
 	butt <- buttonNewWithLabel $ name
 	set butt [ widgetOpacity := 0.7 ]
+	shipImage <- imageNewFromIconName ("ship" :: String) IconSizeButton
+	buttonSetImage butt shipImage
 	on butt buttonActivated $ onClick ship
 	let ssid = (to $ ships_in_star_systems view) ! shid
 	let (UniverseLocation x y) = location $ (star_systems view) ! ssid
