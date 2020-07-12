@@ -59,30 +59,49 @@ addShip uiState layout view onClick ship@Ship { name = name, uuid = shid } = do
 	let shipButtonYOffset = 25
 	fixedPut layout butt ((scaleCoord $ x - fst galaxyDisplayOffsets), (shipButtonYOffset + (scaleCoord $ y - snd galaxyDisplayOffsets)))
 
+makeStarSystemWidget :: Types.Color -> IO DrawingArea
+makeStarSystemWidget Types.Color {..} = do
+	widget <- drawingAreaNew
+	it <- iconThemeGetDefault
+	-- TODO gtk_icon_theme_lookup_by_gicon_for_scale
+	let size = 48
+	(Just starPix) <- iconThemeLoadIcon it ("star" :: String) size IconLookupGenericFallback
+	(Just reticlePix) <- iconThemeLoadIcon it ("reticle" :: String) size IconLookupGenericFallback
+	widgetSetSizeRequest widget size size
+	on widget draw $ do
+		-- set the star system border color to the empire color and make it transparent
+		setSourceRGB (realToFrac r) (realToFrac g) (realToFrac b)
+		let lineWidth = 4
+		setLineWidth lineWidth
+		arc ((fromIntegral size) / 2) ((fromIntegral size) / 2) ((fromIntegral size) / 2 - lineWidth / 2) 0 (2 * pi)
+		stroke
+		setSourcePixbuf starPix 0 0
+		paint
+		setSourcePixbuf reticlePix 0 0
+		paint
+	pure widget
+
 addStarSystem :: Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> (Empire, StarSystem) -> IO ()
 addStarSystem layout onClick (xoff, yoff) (empire, ss@StarSystem {..}) = do
-	butt <- buttonNewWithLabel $ name
-	containerSetBorderWidth butt 1
-	-- https://stackoverflow.com/questions/5812113/pygtk-change-a-widgets-border-color
-	buttBordered <- eventBoxNew
-	containerAdd buttBordered butt
-	-- set the star system border color to the empire color and make it transparent
-	widgetModifyBg buttBordered StateNormal $ toColor $ color empire
-	set butt [ widgetOpacity := 0.7 ]
+	butt <- makeStarSystemWidget $ color empire
+	set butt [ widgetOpacity := 0.9 ]
 
-	mapM (\cap -> when (cap == uuid) $ do
-			capitalImage <- imageNewFromIconName ("crown" :: String) IconSizeButton
-			buttonSetImage butt capitalImage
-		) $ maybeToList $ capital empire
+	-- TODO draw the system name and crown on the galaxy map
+	--mapM (\cap -> when (cap == uuid) $ do
+	--		capitalImage <- imageNewFromIconName ("crown" :: String) IconSizeButton
+	--		buttonSetImage butt capitalImage
+	--	) $ maybeToList $ capital empire
 
-	on butt buttonActivated $ onClick ss
+	on butt buttonPressEvent $ tryEvent $ do
+		LeftButton <- eventButton
+		liftIO $ onClick ss
 	let (UniverseLocation x y) = location
 	-- place the buttons in the layout so they can be realized
-	fixedPut layout buttBordered ((scaleCoord $ x - xoff), (scaleCoord $ y - yoff))
+	fixedPut layout butt ((scaleCoord $ x - xoff), (scaleCoord $ y - yoff))
 	after butt realize $ do
 		-- center the star system buttons on their locations
-		(Rectangle x y w h) <- widgetGetAllocation buttBordered
-		fixedMove layout buttBordered (x - (w `div` 2), y - (h `div` 2))
+		(Rectangle x y w h) <- widgetGetAllocation butt
+		fixedMove layout butt (x - (w `div` 2), y - (h `div` 2))
 	pure ()
 
 addStarSystems uiState layout onClick systems = do
