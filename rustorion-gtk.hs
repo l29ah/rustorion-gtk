@@ -122,12 +122,6 @@ addStarSystem selectedObject layout onClick (xoff, yoff) (empire, ss@StarSystem 
 	butt <- makeStarSystemWidget $ color empire
 	set butt [ widgetOpacity := 0.9 ]
 
-	-- TODO draw the system name and crown on the galaxy map
-	--mapM (\cap -> when (cap == uuid) $ do
-	--		capitalImage <- imageNewFromIconName ("crown" :: String) IconSizeButton
-	--		buttonSetImage butt capitalImage
-	--	) $ maybeToList $ capital empire
-
 	after butt buttonPressEvent $ tryEvent $ do
 		LeftButton <- eventButton
 		liftIO $ do
@@ -166,16 +160,25 @@ drawLanes offsets UniverseView {..} = do
 			) ids
 		) $ M.toList starlanes
 
-drawSystemNames (xoff, yoff) UniverseView {..} = do
+drawSystemIdentifiers crownPix (xoff, yoff) UniverseView {..} annotatedStarSystems = do
 	setSourceRGB 1 1 1
 	let systemNameYOffset = 35
-	mapM_ (\(_, StarSystem {..}) -> do
+	let crownYOffset = 18
+	mapM_ (\(empire, StarSystem {..}) -> do
 			let UniverseLocation x y = location
 			setFontSize 16
 			exts <- textExtents name
 			moveTo ((fromIntegral $ scaleCoord $ x - xoff) - textExtentsWidth exts / 2) ((fromIntegral $ scaleCoord $ y - yoff) - systemNameYOffset)
 			showText name
-		) $ M.toList star_systems
+			when (capital empire == Just uuid) $ do
+				save
+				setSourcePixbuf crownPix (fromIntegral $ scaleCoord $ x - xoff) ((fromIntegral $ scaleCoord $ y - yoff) - systemNameYOffset - crownYOffset)
+				crownPat <- getSource
+				let Types.Color {..} = color empire
+				setSourceRGB (realToFrac r) (realToFrac g) (realToFrac b)
+				mask crownPat
+				restore
+		) $ M.elems annotatedStarSystems
 
 annotateStarSystems UniverseView {..} = M.fromList $ map (\(id, ss) ->
 		let empire = empires ! ((to star_systems_in_empires) ! id) in
@@ -289,9 +292,11 @@ handleNewTurn conn windowRef = do
 		addStarSystems uiState layout (labelSetText infoLabel . show) $ M.elems $ annotatedStarSystems
 		mapM_ (addShip uiState layout view (labelSetText infoLabel . show)) $ M.elems $ ships view
 		UIState { galaxyDisplayOffsets = offsets } <- readTVarIO uiState
+		it <- iconThemeGetDefault
+		(Just crownPix) <- iconThemeLoadIcon it ("crown" :: String) 16 IconLookupGenericFallback
 		on starlaneLayer draw $ do
 			drawLanes offsets view
-			drawSystemNames offsets view
+			drawSystemIdentifiers crownPix offsets view annotatedStarSystems
 
 		widgetShowAll w
 
