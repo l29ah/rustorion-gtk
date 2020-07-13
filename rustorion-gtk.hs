@@ -8,7 +8,7 @@ import Data.Default
 import Data.Function ((&))
 import Data.IORef
 import qualified Data.Map as M
-import Data.Map ((!))
+import Data.Map ((!), (!?))
 import Data.Maybe
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -119,9 +119,9 @@ makeStarSystemWidget Types.Color {..} = do
 	widgetAddEvents widget [FocusChangeMask]
 	pure widget
 
-addStarSystem :: IORef (Maybe (ID Void)) -> Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> (Empire, StarSystem) -> IO ()
+addStarSystem :: IORef (Maybe (ID Void)) -> Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> (Maybe Empire, StarSystem) -> IO ()
 addStarSystem selectedObject layout onClick (xoff, yoff) (empire, ss@StarSystem {..}) = do
-	butt <- makeStarSystemWidget $ color empire
+	butt <- makeStarSystemWidget $ maybe (Types.Color 0.5 0.5 0.5) color empire
 	set butt [ widgetOpacity := 0.9 ]
 
 	after butt buttonPressEvent $ tryEvent $ do
@@ -194,18 +194,18 @@ drawSystemIdentifiers crownPix (xoff, yoff) UniverseView {..} annotatedStarSyste
 			exts <- textExtents name
 			moveTo ((fromIntegral $ scaleCoord $ x - xoff) - textExtentsWidth exts / 2) ((fromIntegral $ scaleCoord $ y - yoff) - systemNameYOffset)
 			showText name
-			when (capital empire == Just uuid) $ do
+			when (maybe False (\e -> capital e == Just uuid) empire) $ do
 				save
 				setSourcePixbuf crownPix (fromIntegral $ scaleCoord $ x - xoff) ((fromIntegral $ scaleCoord $ y - yoff) - systemNameYOffset - crownYOffset)
 				crownPat <- getSource
-				let Types.Color {..} = color empire
+				let Types.Color {..} = color $ fromJust empire
 				setSourceRGB (realToFrac r) (realToFrac g) (realToFrac b)
 				mask crownPat
 				restore
 		) $ M.elems annotatedStarSystems
 
 annotateStarSystems UniverseView {..} = M.fromList $ map (\(id, ss) ->
-		let empire = empires ! ((to star_systems_in_empires) ! id) in
+		let empire = fmap (empires !) ((to star_systems_in_empires) !? id) in
 		(id, (empire, ss))
 	) $ M.toList $ star_systems
 
