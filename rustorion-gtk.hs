@@ -10,6 +10,8 @@ import Data.IORef
 import qualified Data.Map as M
 import Data.Map ((!))
 import Data.Maybe
+import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Void
 import Graphics.Rendering.Cairo
 import Graphics.UI.Gtk as GTK
@@ -74,7 +76,7 @@ makeShipWidget Types.Color {..} = do
 	pure widget
 
 addShip :: TVar UIState -> Fixed -> UniverseView -> (Ship -> IO ()) -> Ship -> IO ()
-addShip uiState layout view onClick ship@Ship { name = name, uuid = shid } = do
+addShip uiState layout view onClick ship@Ship { uuid = shid } = do
 	UIState {..} <- readTVarIO uiState
 	let empireColor = color $ (empires view) ! ((to $ ships_in_empires view) ! shid)
 	butt <- makeShipWidget empireColor
@@ -218,11 +220,13 @@ handleNewTurn conn windowRef = do
 	view <- getView conn
 	print view
 	so <- newIORef Nothing
+	usw <- newIORef Nothing
 	uiState <- newTVarIO $ UIState
 		{ galaxyDisplayOffsets = (0, 0)
 		, selectedObject = so
 		, pendingShipActions = mempty
 		, pendingStarSystemActions = mempty
+		, updateShipWindow = usw
 		}
 	postGUISync $ do
 		-- purge the old window
@@ -290,7 +294,41 @@ handleNewTurn conn windowRef = do
 
 		-- draw our view content
 		addStarSystems uiState layout (labelSetText infoLabel . show) $ M.elems $ annotatedStarSystems
-		mapM_ (addShip uiState layout view (labelSetText infoLabel . show)) $ M.elems $ ships view
+		mapM_ (addShip uiState layout view (\s@Ship {..} -> do
+				let setShipInfo label Ship {..} = do
+					let shipEmpire = (to $ ships_in_empires view) ! uuid
+					let shipLocation = (to $ ships_in_star_systems view) ! uuid
+					let shipsAtLocation = (from $ ships_in_star_systems view) ! shipLocation
+					let numberOfShipsInStack = length $ filter (\Ship {..} -> shipEmpire == (to $ ships_in_empires view) ! uuid) $ map (\shid -> (ships view) ! shid) shipsAtLocation
+					let showShipInfo = T.concat [T.pack $ show numberOfShipsInStack, " ships owned by ", (\Empire {..} -> name) $ (empires view) ! shipEmpire]
+					labelSetText label showShipInfo
+				uis <- readTVarIO uiState
+				usw <- readIORef $ updateShipWindow uis
+				case usw of
+					Nothing -> do
+						-- we don't have a ship info window, so create it
+						shipWindow <- windowNew
+						on shipWindow deleteEvent $ (liftIO $ writeIORef (updateShipWindow uis) Nothing) >> pure False
+						windowSetTypeHint shipWindow WindowTypeHintToolbar
+						set shipWindow
+							[ windowTransientFor := w
+							, windowDestroyWithParent := True
+							]
+
+						shipInfo <- labelNew $ (Nothing :: Maybe Text)
+						setShipInfo shipInfo s
+						writeIORef (updateShipWindow uis) $ Just $ setShipInfo shipInfo
+						containerAdd shipWindow shipInfo
+						widgetShowAll shipWindow
+						-- ask the window manager to put the ship info window to the bottom
+						scr <- fmap fromJust screenGetDefault
+						y <- screenGetHeight scr
+						-- window gravity seems broken
+						(_, wy) <- windowGetSize shipWindow
+						windowMove shipWindow 0 (y - wy)
+					Just update -> update s	-- the window is already present, so just write to it
+				labelSetText infoLabel $ show s
+			)) $ M.elems $ ships view
 		UIState { galaxyDisplayOffsets = offsets } <- readTVarIO uiState
 		it <- iconThemeGetDefault
 		(Just crownPix) <- iconThemeLoadIcon it ("crown" :: String) 16 IconLookupGenericFallback

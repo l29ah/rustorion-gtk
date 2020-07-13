@@ -91,4 +91,5 @@ data UIState = UIState
 	, selectedObject :: IORef (Maybe (ID Void))
 	, pendingShipActions :: Map (ID Ship) Action
 	, pendingStarSystemActions :: Map (ID StarSystem) Action
+	, updateShipWindow :: IORef (Maybe (Ship -> IO ()))
 	} deriving (Eq, Generic)
