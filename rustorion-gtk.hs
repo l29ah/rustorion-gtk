@@ -303,31 +303,7 @@ handleNewTurn conn windowRef = do
 					let showShipInfo = T.concat [T.pack $ show numberOfShipsInStack, " ships owned by ", (\Empire {..} -> name) $ (empires view) ! shipEmpire]
 					labelSetText label showShipInfo
 				uis <- readTVarIO uiState
-				usw <- readIORef $ updateShipWindow uis
-				case usw of
-					Nothing -> do
-						-- we don't have a ship info window, so create it
-						shipWindow <- windowNew
-						on shipWindow deleteEvent $ (liftIO $ writeIORef (updateShipWindow uis) Nothing) >> pure False
-						windowSetTypeHint shipWindow WindowTypeHintToolbar
-						set shipWindow
-							[ windowTransientFor := w
-							, windowDestroyWithParent := True
-							]
-
-						shipInfo <- labelNew $ (Nothing :: Maybe Text)
-						setShipInfo shipInfo s
-						writeIORef (updateShipWindow uis) $ Just $ setShipInfo shipInfo
-						containerAdd shipWindow shipInfo
-						widgetShowAll shipWindow
-						-- ask the window manager to put the ship info window to the bottom
-						scr <- fmap fromJust screenGetDefault
-						y <- screenGetHeight scr
-						-- window gravity seems broken
-						(_, wy) <- windowGetSize shipWindow
-						windowMove shipWindow 0 (y - wy)
-					Just update -> update s	-- the window is already present, so just write to it
-				labelSetText infoLabel $ show s
+				setShipInfo infoLabel s
 			)) $ M.elems $ ships view
 		UIState { galaxyDisplayOffsets = offsets } <- readTVarIO uiState
 		it <- iconThemeGetDefault
