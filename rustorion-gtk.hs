@@ -48,14 +48,43 @@ makeScrollable scroll = do
 scaleFactor = 20
 scaleCoord x = 100 + (round $ x / scaleFactor)
 
+makeShipWidget :: Types.Color -> IO DrawingArea
+makeShipWidget Types.Color {..} = do
+	widget <- drawingAreaNew
+	set widget [ widgetCanFocus := True ]
+	it <- iconThemeGetDefault
+	-- TODO gtk_icon_theme_lookup_by_gicon_for_scale
+	let size = 20
+	(Just shipPix) <- iconThemeLoadIcon it ("ship" :: String) size IconLookupGenericFallback
+	(Just reticlePix) <- iconThemeLoadIcon it ("reticle" :: String) size IconLookupGenericFallback
+	widgetSetSizeRequest widget size size
+	on widget draw $ do
+		setSourceRGB (realToFrac r) (realToFrac g) (realToFrac b)
+		paint
+		setOperator OperatorDestAtop
+		setSourcePixbuf shipPix 0 0
+		paint
+		drawReticle <- liftIO $ widgetGetIsFocus widget
+		when drawReticle $ do
+			setOperator OperatorOver
+			setSourcePixbuf reticlePix 0 0
+			paint
+	on widget focus $ const $ widgetQueueDraw widget >> pure True
+	widgetAddEvents widget [FocusChangeMask]
+	pure widget
+
 addShip :: TVar UIState -> Fixed -> UniverseView -> (Ship -> IO ()) -> Ship -> IO ()
 addShip uiState layout view onClick ship@Ship { name = name, uuid = shid } = do
 	UIState {..} <- readTVarIO uiState
-	butt <- buttonNewWithLabel $ name
-	set butt [ widgetOpacity := 0.7 ]
-	shipImage <- imageNewFromIconName ("ship" :: String) IconSizeButton
-	buttonSetImage butt shipImage
-	on butt buttonActivated $ onClick ship
+	let empireColor = color $ (empires view) ! ((to $ ships_in_empires view) ! shid)
+	butt <- makeShipWidget empireColor
+	set butt [ widgetOpacity := 0.9 ]
+	after butt buttonPressEvent $ tryEvent $ do
+		LeftButton <- eventButton
+		liftIO $ do
+			writeIORef selectedObject $ Just $ coerce shid
+			widgetGrabFocus butt
+			onClick ship
 	let ssid = (to $ ships_in_star_systems view) ! shid
 	let (UniverseLocation x y) = location $ (star_systems view) ! ssid
 	let shipButtonYOffset = 25
