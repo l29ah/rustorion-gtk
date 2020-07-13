@@ -145,6 +145,28 @@ addStarSystems uiState layout onClick systems = do
 	st <- readTVarIO uiState
 	mapM_ (addStarSystem (selectedObject st) layout onClick offsets) systems
 
+drawShipMoveOrder (xoff, yoff) (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
+	setLineWidth 2.5
+	setSourceRGB 0 1 0
+	let sourceX = fromIntegral $ scaleCoord $ x1 - xoff
+	let sourceY = fromIntegral $ scaleCoord $ y1 - yoff
+	let destX = fromIntegral $ scaleCoord $ x2 - xoff
+	let destY = fromIntegral $ scaleCoord $ y2 - yoff
+	moveTo sourceX sourceY
+	lineTo destX destY
+	let arrowHeadLen = 15
+	let arrowHeadAngle = pi / 6
+	let lineAngle = atan $ (destY - sourceY) / (destX - sourceX)
+	liftIO $ print lineAngle
+	let absAngle = lineAngle + arrowHeadAngle
+	liftIO $ print absAngle
+	let angle1 = if signum (destX - sourceX) > 0 then absAngle else absAngle - pi
+	lineTo (destX - arrowHeadLen * cos angle1) (destY - arrowHeadLen * sin angle1)
+	moveTo destX destY
+	let angle2 = angle1 - 2 * arrowHeadAngle
+	lineTo (destX - arrowHeadLen * cos angle2) (destY - arrowHeadLen * sin angle2)
+	stroke
+
 drawLane (xoff, yoff) (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
 	setLineWidth 1.5
 	setSourceRGB 0.6 0.6 0.6
