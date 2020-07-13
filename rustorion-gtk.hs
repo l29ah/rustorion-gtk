@@ -3,12 +3,14 @@
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad
+import Data.Coerce
 import Data.Default
 import Data.Function ((&))
 import Data.IORef
 import qualified Data.Map as M
 import Data.Map ((!))
 import Data.Maybe
+import Data.Void
 import Graphics.Rendering.Cairo
 import Graphics.UI.Gtk as GTK
 import SDL.Init
@@ -62,6 +64,7 @@ addShip uiState layout view onClick ship@Ship { name = name, uuid = shid } = do
 makeStarSystemWidget :: Types.Color -> IO DrawingArea
 makeStarSystemWidget Types.Color {..} = do
 	widget <- drawingAreaNew
+	set widget [ widgetCanFocus := True ]
 	it <- iconThemeGetDefault
 	-- TODO gtk_icon_theme_lookup_by_gicon_for_scale
 	let size = 48
@@ -77,12 +80,16 @@ makeStarSystemWidget Types.Color {..} = do
 		stroke
 		setSourcePixbuf starPix 0 0
 		paint
-		setSourcePixbuf reticlePix 0 0
-		paint
+		drawReticle <- liftIO $ widgetGetIsFocus widget
+		when drawReticle $ do
+			setSourcePixbuf reticlePix 0 0
+			paint
+	on widget focus $ const $ widgetQueueDraw widget >> pure True
+	widgetAddEvents widget [FocusChangeMask]
 	pure widget
 
-addStarSystem :: Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> (Empire, StarSystem) -> IO ()
-addStarSystem layout onClick (xoff, yoff) (empire, ss@StarSystem {..}) = do
+addStarSystem :: IORef (Maybe (ID Void)) -> Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> (Empire, StarSystem) -> IO ()
+addStarSystem selectedObject layout onClick (xoff, yoff) (empire, ss@StarSystem {..}) = do
 	butt <- makeStarSystemWidget $ color empire
 	set butt [ widgetOpacity := 0.9 ]
 
@@ -92,9 +99,12 @@ addStarSystem layout onClick (xoff, yoff) (empire, ss@StarSystem {..}) = do
 	--		buttonSetImage butt capitalImage
 	--	) $ maybeToList $ capital empire
 
-	on butt buttonPressEvent $ tryEvent $ do
+	after butt buttonPressEvent $ tryEvent $ do
 		LeftButton <- eventButton
-		liftIO $ onClick ss
+		liftIO $ do
+			writeIORef selectedObject $ Just $ coerce uuid
+			widgetGrabFocus butt
+			onClick ss
 	let (UniverseLocation x y) = location
 	-- place the buttons in the layout so they can be realized
 	fixedPut layout butt ((scaleCoord $ x - xoff), (scaleCoord $ y - yoff))
@@ -107,7 +117,8 @@ addStarSystem layout onClick (xoff, yoff) (empire, ss@StarSystem {..}) = do
 addStarSystems uiState layout onClick systems = do
 	let offsets = (minimum $ map (ulx . location . snd) systems, minimum $ map (uly . location . snd) systems)
 	atomically $ modifyTVar uiState $ \s -> s { galaxyDisplayOffsets = offsets }
-	mapM_ (addStarSystem layout onClick offsets) systems
+	st <- readTVarIO uiState
+	mapM_ (addStarSystem (selectedObject st) layout onClick offsets) systems
 
 drawLane (xoff, yoff) (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
 	setLineWidth 1.5
@@ -125,6 +136,17 @@ drawLanes offsets UniverseView {..} = do
 				drawLane offsets (location $ star_systems ! id1) (location $ star_systems ! id2)
 			) ids
 		) $ M.toList starlanes
+
+drawSystemNames (xoff, yoff) UniverseView {..} = do
+	setSourceRGB 1 1 1
+	let systemNameYOffset = 35
+	mapM_ (\(_, StarSystem {..}) -> do
+			let UniverseLocation x y = location
+			setFontSize 16
+			exts <- textExtents name
+			moveTo ((fromIntegral $ scaleCoord $ x - xoff) - textExtentsWidth exts / 2) ((fromIntegral $ scaleCoord $ y - yoff) - systemNameYOffset)
+			showText name
+		) $ M.toList star_systems
 
 annotateStarSystems UniverseView {..} = M.fromList $ map (\(id, ss) ->
 		let empire = empires ! ((to star_systems_in_empires) ! id) in
@@ -163,7 +185,13 @@ makeWindow = do
 handleNewTurn conn windowRef = do
 	view <- getView conn
 	print view
-	uiState <- newTVarIO def
+	so <- newIORef Nothing
+	uiState <- newTVarIO $ UIState
+		{ galaxyDisplayOffsets = (0, 0)
+		, selectedObject = so
+		, pendingShipActions = mempty
+		, pendingStarSystemActions = mempty
+		}
 	postGUISync $ do
 		-- purge the old window
 		readIORef windowRef >>= widgetDestroy
@@ -232,7 +260,9 @@ handleNewTurn conn windowRef = do
 		addStarSystems uiState layout (labelSetText infoLabel . show) $ M.elems $ annotatedStarSystems
 		mapM_ (addShip uiState layout view (labelSetText infoLabel . show)) $ M.elems $ ships view
 		UIState { galaxyDisplayOffsets = offsets } <- readTVarIO uiState
-		on starlaneLayer draw $ drawLanes offsets view
+		on starlaneLayer draw $ do
+			drawLanes offsets view
+			drawSystemNames offsets view
 
 		widgetShowAll w
 

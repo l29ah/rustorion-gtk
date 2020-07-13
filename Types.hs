@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric, DuplicateRecordFields, FlexibleInstances #-}
 module Types where
 
-import Data.Default
+import Data.IORef
 import Data.Map
 import Data.MessagePack as MP
 import Data.Text
@@ -88,5 +88,7 @@ instance MessagePack Action where
 
 data UIState = UIState
 	{ galaxyDisplayOffsets :: (Double, Double)
-	} deriving (Show, Eq, Generic)
-instance Default UIState
+	, selectedObject :: IORef (Maybe (ID Void))
+	, pendingShipActions :: Map (ID Ship) Action
+	, pendingStarSystemActions :: Map (ID StarSystem) Action
+	} deriving (Eq, Generic)
