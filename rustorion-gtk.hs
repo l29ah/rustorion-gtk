@@ -110,8 +110,8 @@ addStarSystems uiState layout onClick systems = do
 	mapM_ (addStarSystem layout onClick offsets) systems
 
 drawLane (xoff, yoff) (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
-	setLineWidth 2
-	setSourceRGB 0 1 0
+	setLineWidth 1.5
+	setSourceRGB 0.6 0.6 0.6
 	moveTo (fromIntegral $ scaleCoord $ x1 - xoff) (fromIntegral $ scaleCoord $ y1 - yoff)
 	lineTo (fromIntegral $ scaleCoord $ x2 - xoff) (fromIntegral $ scaleCoord $ y2 - yoff)
 	stroke
