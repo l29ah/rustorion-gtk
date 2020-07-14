@@ -78,8 +78,18 @@ makeShipWidget My.Color {..} = do
 	widgetAddEvents widget [FocusChangeMask]
 	pure widget
 
-addFleet :: TVar UIState -> Fixed -> UniverseView -> (Fleet -> IO ()) -> Fleet -> IO ()
-addFleet uiState layout view onClick fleet@Fleet {..} = do
+-- |adds icons of fleets present in a given star system
+addFleets :: TVar UIState -> Fixed -> UniverseView -> (Fleet -> IO ()) -> [Fleet] -> IO ()
+addFleets uiState layout view onClick fleets = do
+	let ssid = fleetLocation $ head fleets
+	let fleetN = length fleets
+	let fleetAngles = map (\x -> (fromIntegral x) * 2 * pi / (fromIntegral fleetN)) [0..]
+	let fleetIconDistance = 25
+	let fleetIconOffset angle = (round $ fleetIconDistance * cos angle, round $ fleetIconDistance * sin angle)
+	sequence_ $ zipWith (\angle fleet -> addFleet (fleetIconOffset angle) uiState layout view onClick fleet) fleetAngles fleets
+
+addFleet :: (Int, Int) -> TVar UIState -> Fixed -> UniverseView -> (Fleet -> IO ()) -> Fleet -> IO ()
+addFleet (xoffset, yoffset) uiState layout view onClick fleet@Fleet {..} = do
 	UIState {..} <- readTVarIO uiState
 	let empireColor = color $ (empires view) ! fleetOwner
 	butt <- makeShipWidget empireColor
@@ -91,8 +101,7 @@ addFleet uiState layout view onClick fleet@Fleet {..} = do
 			widgetGrabFocus butt
 			onClick fleet
 	let (UniverseLocation x y) = location $ (star_systems view) ! fleetLocation
-	let shipButtonYOffset = 25
-	fixedPut layout butt ((scaleCoord $ x - fst galaxyDisplayOffsets), (shipButtonYOffset + (scaleCoord $ y - snd galaxyDisplayOffsets)))
+	fixedPut layout butt (xoffset + (scaleCoord $ x - fst galaxyDisplayOffsets), (yoffset + (scaleCoord $ y - snd galaxyDisplayOffsets)))
 
 makeStarSystemWidget :: My.Color -> IO DrawingArea
 makeStarSystemWidget My.Color {..} = do
@@ -385,13 +394,13 @@ handleNewTurn conn windowRef = do
 
 		-- draw our view content
 		addStarSystems view adjustActions uiState layout (labelSetText infoLabel . show) $ M.elems $ annotatedStarSystems annotatedView
-		mapM_ (addFleet uiState layout view (\s@Fleet {..} -> do
+		mapM_ (addFleets uiState layout view (\s@Fleet {..} -> do
 				let setShipInfo label Fleet {..} = do
 					let showShipInfo = T.concat [T.pack $ show (length fleetShips), " ships owned by ", (\Empire {..} -> name) $ (empires view) ! fleetOwner]
 					labelSetText label showShipInfo
 				uis <- readTVarIO uiState
 				setShipInfo infoLabel s
-			)) $ fleets annotatedView
+			)) $ groupBy ((==) `F.on` (\Fleet {..} -> fleetLocation)) $ fleets annotatedView
 		UIState { galaxyDisplayOffsets = offsets } <- readTVarIO uiState
 		it <- iconThemeGetDefault
 		(Just crownPix) <- iconThemeLoadIcon it ("crown" :: String) 16 IconLookupGenericFallback
