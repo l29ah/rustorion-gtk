@@ -47,6 +47,7 @@ data StarSystem = StarSystem
 	, name :: Text
 	, location :: UniverseLocation
 	, population :: Word64
+	, can_capture :: Bool
 	} deriving (Show, Eq, Ord, Generic)
 instance MessagePack StarSystem
 
