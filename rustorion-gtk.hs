@@ -157,9 +157,7 @@ drawShipMoveOrder (xoff, yoff) (UniverseLocation x1 y1) (UniverseLocation x2 y2)
 	let arrowHeadLen = 15
 	let arrowHeadAngle = pi / 6
 	let lineAngle = atan $ (destY - sourceY) / (destX - sourceX)
-	liftIO $ print lineAngle
 	let absAngle = lineAngle + arrowHeadAngle
-	liftIO $ print absAngle
 	let angle1 = if signum (destX - sourceX) > 0 then absAngle else absAngle - pi
 	lineTo (destX - arrowHeadLen * cos angle1) (destY - arrowHeadLen * sin angle1)
 	moveTo destX destY
