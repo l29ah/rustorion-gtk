@@ -120,8 +120,8 @@ makeStarSystemWidget My.Color {..} = do
 	widgetAddEvents widget [FocusChangeMask]
 	pure widget
 
-addStarSystem :: UniverseView -> IO () -> TVar [My.Action] -> IORef (Maybe (ID Void)) -> Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> (Maybe Empire, StarSystem) -> IO ()
-addStarSystem view redraw pendingActions selectedObject layout onClick (xoff, yoff) (empire, ss@StarSystem {..}) = do
+addStarSystem :: UniverseView -> IO () -> (([My.Action] -> [My.Action]) -> IO ()) -> IORef (Maybe (ID Void)) -> Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> (Maybe Empire, StarSystem) -> IO ()
+addStarSystem view redraw adjustActions selectedObject layout onClick (xoff, yoff) (empire, ss@StarSystem {..}) = do
 	butt <- makeStarSystemWidget $ maybe (My.Color 0.5 0.5 0.5) color empire
 	set butt [ widgetOpacity := 0.9 ]
 
@@ -137,7 +137,7 @@ addStarSystem view redraw pendingActions selectedObject layout onClick (xoff, yo
 				maybe (pure ()) (\selected -> when (M.member (coerce selected) $ ships view) $ do
 						-- order a ship to move there
 						let shid = coerce selected
-						atomically $ modifyTVar' pendingActions $ moveShip shid uuid
+						adjustActions $ moveShip shid uuid
 						-- redraw the starlane map
 						redraw
 					) maybeSelected
@@ -162,15 +162,15 @@ addStarSystem view redraw pendingActions selectedObject layout onClick (xoff, yo
 			void $ on captureButt toggled $ do
 				activated <- toggleButtonGetActive captureButt
 				case activated of
-					True -> atomically $ modifyTVar' pendingActions $ captureStarSystem uuid $ controlled_empire view
-					False -> atomically $ modifyTVar' pendingActions $ dontCaptureStarSystem uuid
+					True -> adjustActions $ captureStarSystem uuid $ controlled_empire view
+					False -> adjustActions $ dontCaptureStarSystem uuid
 	pure ()
 
-addStarSystems view pendingActions uiState layout onClick systems = do
+addStarSystems view adjustActions uiState layout onClick systems = do
 	let offsets = (minimum $ map (ulx . location . snd) systems, minimum $ map (uly . location . snd) systems)
 	atomically $ modifyTVar' uiState $ \s -> s { galaxyDisplayOffsets = offsets }
 	st <- readTVarIO uiState
-	mapM_ (addStarSystem view (redrawStarlaneLayer st) pendingActions (selectedObject st) layout onClick offsets) systems
+	mapM_ (addStarSystem view (redrawStarlaneLayer st) adjustActions (selectedObject st) layout onClick offsets) systems
 
 drawShipMoveOrder (xoff, yoff) (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
 	setLineWidth 2.5
@@ -286,6 +286,10 @@ handleNewTurn conn windowRef = do
 	postGUISync $ do
 		-- purge the old window
 		readIORef windowRef >>= widgetDestroy
+		-- and orders for the previous turn
+		atomically $ writeTVar pendingActions []
+
+		-- create an universe view window
 		w <- makeWindow
 		writeIORef windowRef w
 
@@ -317,7 +321,7 @@ handleNewTurn conn windowRef = do
 				labelSetText readyButtonLabel ("Ready" :: String)
 				readyButton & toggleButtonSetActive $ True
 				readyButton & widgetSetSensitive $ True
-				atomically $ writeTVar pendingActions []
+		let adjustActions = adjustPendingActions (readyButton & toggleButtonSetActive $ False) pendingActions conn
 
 		panels <- vPanedNew
 		panedPack2 topPaned panels True True
@@ -351,7 +355,7 @@ handleNewTurn conn windowRef = do
 		let annotatedStarSystems = annotateStarSystems view
 
 		-- draw our view content
-		addStarSystems view pendingActions uiState layout (labelSetText infoLabel . show) $ M.elems $ annotatedStarSystems
+		addStarSystems view adjustActions uiState layout (labelSetText infoLabel . show) $ M.elems $ annotatedStarSystems
 		mapM_ (addShip uiState layout view (\s@Ship {..} -> do
 				let setShipInfo label Ship {..} = do
 					let shipEmpire = (to $ ships_in_empires view) ! uuid

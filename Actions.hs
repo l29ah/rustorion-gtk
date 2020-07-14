@@ -1,6 +1,11 @@
 module Actions where
 
-import Types
+import Control.Concurrent.MVar
+import Control.Concurrent.STM
+import Network.Connection
+
+import RPC
+import Types as My
 
 dontCaptureStarSystem :: ID StarSystem -> [Action] -> [Action]
 dontCaptureStarSystem ssid = filter (\act ->
@@ -21,3 +26,9 @@ dontMoveShip shid = filter (\act ->
 
 moveShip :: ID Ship -> ID StarSystem -> [Action] -> [Action]
 moveShip shid ssid actions = MoveShip shid ssid : dontMoveShip shid actions
+
+adjustPendingActions :: IO () -> TVar [My.Action] -> MVar Connection -> ([Action] -> [Action]) -> IO ()
+adjustPendingActions untick actionVar conn modifier = do
+	untick
+	cancelActions conn
+	atomically $ modifyTVar' actionVar modifier

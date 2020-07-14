@@ -4,6 +4,7 @@ module RPC
 	, rpcHandle
 	, getView
 	, setActions
+	, cancelActions
 	) where
 
 import Control.Concurrent.MVar
