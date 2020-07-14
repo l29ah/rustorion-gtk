@@ -90,6 +90,9 @@ getView conn = rpc conn "get_view" () >>= unpack . BL.fromStrict
 setActions :: MVar Connection -> [Action] -> IO ()
 setActions conn acts = rpc conn "set_actions" acts >>= print
 
+cancelActions :: MVar Connection -> IO ()
+cancelActions conn = void $ rpc conn "cancel_actions" ()
+
 rpcConnect host port key cert = do
 	ctx <- initConnectionContext
 	let tlsClientParams = (defaultParamsClient host mempty)

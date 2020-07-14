@@ -74,7 +74,7 @@ data UniverseView = UniverseView
 	, ships :: Map (ID Ship) Ship
 	, ships_in_star_systems :: HasMany StarSystem Ship
 	, ships_in_empires :: HasMany Empire Ship
-	, controlled_empire :: ID Void
+	, controlled_empire :: ID Empire
 	, turn_number :: Word
 	} deriving (Show, Eq, Generic)
 instance MessagePack UniverseView
@@ -89,8 +89,7 @@ instance MessagePack Action where
 
 data UIState = UIState
 	{ galaxyDisplayOffsets :: (Double, Double)
+	, redrawStarlaneLayer :: IO ()
 	, selectedObject :: IORef (Maybe (ID Void))
-	, pendingShipActions :: Map (ID Ship) Action
-	, pendingStarSystemActions :: Map (ID StarSystem) Action
 	, updateShipWindow :: IORef (Maybe (Ship -> IO ()))
-	} deriving (Eq, Generic)
+	} deriving (Generic)

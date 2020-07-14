@@ -15,6 +15,7 @@ executable rustorion-gtk
   main-is:             rustorion-gtk.hs
   ghc-options:         -W -fno-warn-tabs -threaded
   other-modules:
+                       Actions
                        CertGen
                        RPC
                        Types

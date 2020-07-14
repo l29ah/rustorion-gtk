@@ -20,12 +20,13 @@ import SDL.Mixer
 import System.Directory
 import System.Exit
 
+import Actions
 import CertGen
 import RPC
-import Types
+import Types as My
 
-toColor :: Types.Color -> GTK.Color
-toColor (Types.Color r g b) = GTK.Color (round $ r * 65535) (round $ g * 65535) (round $ b * 65535)
+toColor :: My.Color -> GTK.Color
+toColor (My.Color r g b) = GTK.Color (round $ r * 65535) (round $ g * 65535) (round $ b * 65535)
 
 makeScrollable scroll = do
 	hadj <- scrolledWindowGetHAdjustment scroll
@@ -50,8 +51,8 @@ makeScrollable scroll = do
 scaleFactor = 20
 scaleCoord x = 100 + (round $ x / scaleFactor)
 
-makeShipWidget :: Types.Color -> IO DrawingArea
-makeShipWidget Types.Color {..} = do
+makeShipWidget :: My.Color -> IO DrawingArea
+makeShipWidget My.Color {..} = do
 	widget <- drawingAreaNew
 	set widget [ widgetCanFocus := True ]
 	it <- iconThemeGetDefault
@@ -92,8 +93,8 @@ addShip uiState layout view onClick ship@Ship { uuid = shid } = do
 	let shipButtonYOffset = 25
 	fixedPut layout butt ((scaleCoord $ x - fst galaxyDisplayOffsets), (shipButtonYOffset + (scaleCoord $ y - snd galaxyDisplayOffsets)))
 
-makeStarSystemWidget :: Types.Color -> IO DrawingArea
-makeStarSystemWidget Types.Color {..} = do
+makeStarSystemWidget :: My.Color -> IO DrawingArea
+makeStarSystemWidget My.Color {..} = do
 	widget <- drawingAreaNew
 	set widget [ widgetCanFocus := True ]
 	it <- iconThemeGetDefault
@@ -119,17 +120,29 @@ makeStarSystemWidget Types.Color {..} = do
 	widgetAddEvents widget [FocusChangeMask]
 	pure widget
 
-addStarSystem :: IORef (Maybe (ID Void)) -> Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> (Maybe Empire, StarSystem) -> IO ()
-addStarSystem selectedObject layout onClick (xoff, yoff) (empire, ss@StarSystem {..}) = do
-	butt <- makeStarSystemWidget $ maybe (Types.Color 0.5 0.5 0.5) color empire
+addStarSystem :: UniverseView -> IO () -> TVar [My.Action] -> IORef (Maybe (ID Void)) -> Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> (Maybe Empire, StarSystem) -> IO ()
+addStarSystem view redraw pendingActions selectedObject layout onClick (xoff, yoff) (empire, ss@StarSystem {..}) = do
+	butt <- makeStarSystemWidget $ maybe (My.Color 0.5 0.5 0.5) color empire
 	set butt [ widgetOpacity := 0.9 ]
 
 	after butt buttonPressEvent $ tryEvent $ do
-		LeftButton <- eventButton
-		liftIO $ do
-			writeIORef selectedObject $ Just $ coerce uuid
-			widgetGrabFocus butt
-			onClick ss
+		buttonClicked <- eventButton
+		liftIO $ case buttonClicked of
+			LeftButton -> do
+				writeIORef selectedObject $ Just $ coerce uuid
+				widgetGrabFocus butt
+				onClick ss
+			RightButton -> do
+				maybeSelected <- readIORef selectedObject
+				maybe (pure ()) (\selected -> when (M.member (coerce selected) $ ships view) $ do
+						-- order a ship to move there
+						let shid = coerce selected
+						atomically $ modifyTVar' pendingActions $ moveShip shid uuid
+						-- redraw the starlane map
+						redraw
+					) maybeSelected
+			_ -> pure ()
+
 	let (UniverseLocation x y) = location
 	-- place the buttons in the layout so they can be realized
 	fixedPut layout butt ((scaleCoord $ x - xoff), (scaleCoord $ y - yoff))
@@ -137,13 +150,27 @@ addStarSystem selectedObject layout onClick (xoff, yoff) (empire, ss@StarSystem 
 		-- center the star system buttons on their locations
 		(Rectangle x y w h) <- widgetGetAllocation butt
 		fixedMove layout butt (x - (w `div` 2), y - (h `div` 2))
+		when can_capture $ do
+			captureButt <- checkButtonNew
+			set captureButt [ widgetOpacity := 0.9 ]
+			captureButtLabel <- labelNew (Nothing :: Maybe String)
+			labelSetMarkup captureButtLabel ("<span foreground=\"red\">capture</span>" :: String)
+			containerAdd captureButt captureButtLabel
+			-- put it under the star system button
+			fixedPut layout captureButt (x, y + (h `div` 2))
+			widgetShowAll captureButt
+			void $ on captureButt toggled $ do
+				activated <- toggleButtonGetActive captureButt
+				case activated of
+					True -> atomically $ modifyTVar' pendingActions $ captureStarSystem uuid $ controlled_empire view
+					False -> atomically $ modifyTVar' pendingActions $ dontCaptureStarSystem uuid
 	pure ()
 
-addStarSystems uiState layout onClick systems = do
+addStarSystems view pendingActions uiState layout onClick systems = do
 	let offsets = (minimum $ map (ulx . location . snd) systems, minimum $ map (uly . location . snd) systems)
-	atomically $ modifyTVar uiState $ \s -> s { galaxyDisplayOffsets = offsets }
+	atomically $ modifyTVar' uiState $ \s -> s { galaxyDisplayOffsets = offsets }
 	st <- readTVarIO uiState
-	mapM_ (addStarSystem (selectedObject st) layout onClick offsets) systems
+	mapM_ (addStarSystem view (redrawStarlaneLayer st) pendingActions (selectedObject st) layout onClick offsets) systems
 
 drawShipMoveOrder (xoff, yoff) (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
 	setLineWidth 2.5
@@ -164,6 +191,15 @@ drawShipMoveOrder (xoff, yoff) (UniverseLocation x1 y1) (UniverseLocation x2 y2)
 	let angle2 = angle1 - 2 * arrowHeadAngle
 	lineTo (destX - arrowHeadLen * cos angle2) (destY - arrowHeadLen * sin angle2)
 	stroke
+
+drawShipMoveOrders offsets (UniverseView {..}) pendingActions = do
+	actions <- liftIO $ readTVarIO pendingActions
+	let shipMoveActions = filter (\act -> case act of; MoveShip _ _ -> True; _ -> False) actions
+	mapM_ (\(MoveShip id toid) -> do
+			let toLocation = location $ star_systems ! toid
+			let shipLocation = location $ star_systems ! ((to ships_in_star_systems) ! id)
+			drawShipMoveOrder offsets shipLocation toLocation
+		) shipMoveActions
 
 drawLane (xoff, yoff) (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
 	setLineWidth 1.5
@@ -196,7 +232,7 @@ drawSystemIdentifiers crownPix (xoff, yoff) UniverseView {..} annotatedStarSyste
 				save
 				setSourcePixbuf crownPix (fromIntegral $ scaleCoord $ x - xoff) ((fromIntegral $ scaleCoord $ y - yoff) - systemNameYOffset - crownYOffset)
 				crownPat <- getSource
-				let Types.Color {..} = color $ fromJust empire
+				let My.Color {..} = color $ fromJust empire
 				setSourceRGB (realToFrac r) (realToFrac g) (realToFrac b)
 				mask crownPat
 				restore
@@ -241,11 +277,10 @@ handleNewTurn conn windowRef = do
 	print view
 	so <- newIORef Nothing
 	usw <- newIORef Nothing
+	pendingActions <- newTVarIO mempty
 	uiState <- newTVarIO $ UIState
 		{ galaxyDisplayOffsets = (0, 0)
 		, selectedObject = so
-		, pendingShipActions = mempty
-		, pendingStarSystemActions = mempty
 		, updateShipWindow = usw
 		}
 	postGUISync $ do
@@ -275,12 +310,14 @@ handleNewTurn conn windowRef = do
 				labelSetText readyButtonLabel ("sending..." :: String)
 				readyButton & toggleButtonSetActive $ False
 				toggleButtonSetInconsistent readyButton True
-				setActions conn []
+				readTVarIO pendingActions >>= print
+				readTVarIO pendingActions >>= setActions conn
 				-- after successful action submission
 				toggleButtonSetInconsistent readyButton False
 				labelSetText readyButtonLabel ("Ready" :: String)
 				readyButton & toggleButtonSetActive $ True
 				readyButton & widgetSetSensitive $ True
+				atomically $ writeTVar pendingActions []
 
 		panels <- vPanedNew
 		panedPack2 topPaned panels True True
@@ -300,6 +337,7 @@ handleNewTurn conn windowRef = do
 
 		starlaneLayer <- drawingAreaNew
 		containerAdd overlay starlaneLayer
+		atomically $ modifyTVar' uiState $ \s -> s { redrawStarlaneLayer = widgetQueueDraw starlaneLayer }
 
 		layout <- fixedNew
 		overlayAdd overlay layout	-- put it over the starlane map
@@ -313,7 +351,7 @@ handleNewTurn conn windowRef = do
 		let annotatedStarSystems = annotateStarSystems view
 
 		-- draw our view content
-		addStarSystems uiState layout (labelSetText infoLabel . show) $ M.elems $ annotatedStarSystems
+		addStarSystems view pendingActions uiState layout (labelSetText infoLabel . show) $ M.elems $ annotatedStarSystems
 		mapM_ (addShip uiState layout view (\s@Ship {..} -> do
 				let setShipInfo label Ship {..} = do
 					let shipEmpire = (to $ ships_in_empires view) ! uuid
@@ -330,6 +368,7 @@ handleNewTurn conn windowRef = do
 		(Just crownPix) <- iconThemeLoadIcon it ("crown" :: String) 16 IconLookupGenericFallback
 		on starlaneLayer draw $ do
 			drawLanes offsets view
+			drawShipMoveOrders offsets view pendingActions
 			drawSystemIdentifiers crownPix offsets view annotatedStarSystems
 
 		widgetShowAll w
