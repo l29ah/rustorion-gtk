@@ -6,7 +6,9 @@ import Control.Monad
 import Data.Coerce
 import Data.Default
 import Data.Function ((&))
+import qualified Data.Function as F
 import Data.IORef
+import Data.List
 import qualified Data.Map as M
 import Data.Map ((!), (!?))
 import Data.Maybe
@@ -76,20 +78,19 @@ makeShipWidget My.Color {..} = do
 	widgetAddEvents widget [FocusChangeMask]
 	pure widget
 
-addShip :: TVar UIState -> Fixed -> UniverseView -> (Ship -> IO ()) -> Ship -> IO ()
-addShip uiState layout view onClick ship@Ship { uuid = shid } = do
+addFleet :: TVar UIState -> Fixed -> UniverseView -> (Fleet -> IO ()) -> Fleet -> IO ()
+addFleet uiState layout view onClick fleet@Fleet {..} = do
 	UIState {..} <- readTVarIO uiState
-	let empireColor = color $ (empires view) ! ((to $ ships_in_empires view) ! shid)
+	let empireColor = color $ (empires view) ! fleetOwner
 	butt <- makeShipWidget empireColor
 	set butt [ widgetOpacity := 0.9 ]
 	after butt buttonPressEvent $ tryEvent $ do
 		LeftButton <- eventButton
 		liftIO $ do
-			writeIORef selectedObject $ Just $ coerce shid
+			writeIORef selectedObject $ Just fleet
 			widgetGrabFocus butt
-			onClick ship
-	let ssid = (to $ ships_in_star_systems view) ! shid
-	let (UniverseLocation x y) = location $ (star_systems view) ! ssid
+			onClick fleet
+	let (UniverseLocation x y) = location $ (star_systems view) ! fleetLocation
 	let shipButtonYOffset = 25
 	fixedPut layout butt ((scaleCoord $ x - fst galaxyDisplayOffsets), (shipButtonYOffset + (scaleCoord $ y - snd galaxyDisplayOffsets)))
 
@@ -120,7 +121,7 @@ makeStarSystemWidget My.Color {..} = do
 	widgetAddEvents widget [FocusChangeMask]
 	pure widget
 
-addStarSystem :: UniverseView -> IO () -> (([My.Action] -> [My.Action]) -> IO ()) -> IORef (Maybe (ID Void)) -> Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> (Maybe Empire, StarSystem) -> IO ()
+addStarSystem :: UniverseView -> IO () -> (([My.Action] -> [My.Action]) -> IO ()) -> IORef (Maybe Fleet) -> Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> (Maybe Empire, StarSystem) -> IO ()
 addStarSystem view redraw adjustActions selectedObject layout onClick (xoff, yoff) (empire, ss@StarSystem {..}) = do
 	butt <- makeStarSystemWidget $ maybe (My.Color 0.5 0.5 0.5) color empire
 	set butt [ widgetOpacity := 0.9 ]
@@ -129,15 +130,14 @@ addStarSystem view redraw adjustActions selectedObject layout onClick (xoff, yof
 		buttonClicked <- eventButton
 		liftIO $ case buttonClicked of
 			LeftButton -> do
-				writeIORef selectedObject $ Just $ coerce uuid
+				writeIORef selectedObject Nothing
 				widgetGrabFocus butt
 				onClick ss
 			RightButton -> do
 				maybeSelected <- readIORef selectedObject
-				maybe (pure ()) (\selected -> when (M.member (coerce selected) $ ships view) $ do
+				maybe (pure ()) (\selected -> do
 						-- order a ship to move there
-						let shid = coerce selected
-						adjustActions $ moveShip shid uuid
+						adjustActions $ moveFleet selected uuid
 						-- redraw the starlane map
 						redraw
 					) maybeSelected
@@ -238,6 +238,34 @@ drawSystemIdentifiers crownPix (xoff, yoff) UniverseView {..} annotatedStarSyste
 				restore
 		) $ M.elems annotatedStarSystems
 
+annotateUniverseView :: UniverseView -> AnnotatedUniverseView
+annotateUniverseView v@UniverseView {..} = AnnotatedUniverseView
+	{ view = v
+	, annotatedStarSystems = annotateStarSystems v
+	, fleets = makePseudoFleets v
+	}
+
+annotateShips :: UniverseView -> [(Ship, ID Empire, ID StarSystem)]
+annotateShips UniverseView {..} = map (\(shid, ship) ->
+		let	shipEmpire = (to ships_in_empires) ! shid
+			shipSS = (to ships_in_star_systems) ! shid in
+		(ship, shipEmpire, shipSS)
+	) $ M.toList ships
+
+-- |assumes the input is grouped by empires and star systems
+groupedShipsToFleet :: [(Ship, ID Empire, ID StarSystem)] -> Fleet
+groupedShipsToFleet ships = Fleet
+	{ fleetShips = map (\(Ship {..}, _, _) -> uuid) ships
+	, fleetLocation = (\(_, _, ss) -> ss) $ head ships
+	, fleetOwner = (\(_, e, _) -> e) $ head ships
+	}
+
+makePseudoFleets :: UniverseView -> [Fleet]
+makePseudoFleets v@UniverseView {..} = map groupedShipsToFleet $ concat $ map (groupBy ((==) `F.on` byStarSystems)) $ groupBy ((==) `F.on` byEmpires) $ annotateShips v
+	where	byStarSystems (_, _, c) = c
+		byEmpires (_, b, _) = b
+
+-- |cache the information about star system ownership
 annotateStarSystems UniverseView {..} = M.fromList $ map (\(id, ss) ->
 		let empire = fmap (empires !) ((to star_systems_in_empires) !? id) in
 		(id, (empire, ss))
@@ -351,29 +379,24 @@ handleNewTurn conn windowRef = do
 		sizeGroupAddWidget sg starlaneLayer
 		sizeGroupAddWidget sg layout
 
-		-- cache the information about star system ownership
-		let annotatedStarSystems = annotateStarSystems view
+		let annotatedView = annotateUniverseView view
 
 		-- draw our view content
-		addStarSystems view adjustActions uiState layout (labelSetText infoLabel . show) $ M.elems $ annotatedStarSystems
-		mapM_ (addShip uiState layout view (\s@Ship {..} -> do
-				let setShipInfo label Ship {..} = do
-					let shipEmpire = (to $ ships_in_empires view) ! uuid
-					let shipLocation = (to $ ships_in_star_systems view) ! uuid
-					let shipsAtLocation = (from $ ships_in_star_systems view) ! shipLocation
-					let numberOfShipsInStack = length $ filter (\Ship {..} -> shipEmpire == (to $ ships_in_empires view) ! uuid) $ map (\shid -> (ships view) ! shid) shipsAtLocation
-					let showShipInfo = T.concat [T.pack $ show numberOfShipsInStack, " ships owned by ", (\Empire {..} -> name) $ (empires view) ! shipEmpire]
+		addStarSystems view adjustActions uiState layout (labelSetText infoLabel . show) $ M.elems $ annotatedStarSystems annotatedView
+		mapM_ (addFleet uiState layout view (\s@Fleet {..} -> do
+				let setShipInfo label Fleet {..} = do
+					let showShipInfo = T.concat [T.pack $ show (length fleetShips), " ships owned by ", (\Empire {..} -> name) $ (empires view) ! fleetOwner]
 					labelSetText label showShipInfo
 				uis <- readTVarIO uiState
 				setShipInfo infoLabel s
-			)) $ M.elems $ ships view
+			)) $ fleets annotatedView
 		UIState { galaxyDisplayOffsets = offsets } <- readTVarIO uiState
 		it <- iconThemeGetDefault
 		(Just crownPix) <- iconThemeLoadIcon it ("crown" :: String) 16 IconLookupGenericFallback
 		on starlaneLayer draw $ do
 			drawLanes offsets view
 			drawShipMoveOrders offsets view pendingActions
-			drawSystemIdentifiers crownPix offsets view annotatedStarSystems
+			drawSystemIdentifiers crownPix offsets view $ annotatedStarSystems annotatedView
 
 		widgetShowAll w
 

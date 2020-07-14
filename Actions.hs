@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module Actions where
 
 import Control.Concurrent.MVar
@@ -26,6 +27,14 @@ dontMoveShip shid = filter (\act ->
 
 moveShip :: ID Ship -> ID StarSystem -> [Action] -> [Action]
 moveShip shid ssid actions = MoveShip shid ssid : dontMoveShip shid actions
+
+apply = foldl1 (.)
+
+dontMoveFleet :: Fleet -> [Action] -> [Action]
+dontMoveFleet Fleet {..} = apply (map dontMoveShip fleetShips)
+
+moveFleet :: Fleet -> ID StarSystem -> [Action] -> [Action]
+moveFleet f@Fleet {..} ssid = apply (map (\ship -> moveShip ship ssid) fleetShips) . dontMoveFleet f
 
 adjustPendingActions :: IO () -> TVar [My.Action] -> MVar Connection -> ([Action] -> [Action]) -> IO ()
 adjustPendingActions untick actionVar conn modifier = do

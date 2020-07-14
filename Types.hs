@@ -79,6 +79,18 @@ data UniverseView = UniverseView
 	} deriving (Show, Eq, Generic)
 instance MessagePack UniverseView
 
+data AnnotatedUniverseView = AnnotatedUniverseView
+	{ view :: UniverseView
+	, annotatedStarSystems :: Map (ID StarSystem) (Maybe Empire, StarSystem)
+	, fleets :: [Fleet]
+	}
+
+data Fleet = Fleet
+	{ fleetShips :: [ID Ship]
+	, fleetLocation :: ID StarSystem
+	, fleetOwner :: ID Empire
+	}
+
 data Action =
 	CaptureStarSystem (ID StarSystem) (ID Empire) |
 	MoveShip (ID Ship) (ID StarSystem)
@@ -90,6 +102,6 @@ instance MessagePack Action where
 data UIState = UIState
 	{ galaxyDisplayOffsets :: (Double, Double)
 	, redrawStarlaneLayer :: IO ()
-	, selectedObject :: IORef (Maybe (ID Void))
+	, selectedObject :: IORef (Maybe Fleet)
 	, updateShipWindow :: IORef (Maybe (Ship -> IO ()))
 	} deriving (Generic)
