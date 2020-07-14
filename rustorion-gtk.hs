@@ -136,10 +136,12 @@ addStarSystem view redraw adjustActions selectedObject layout onClick (xoff, yof
 			RightButton -> do
 				maybeSelected <- readIORef selectedObject
 				maybe (pure ()) (\selected -> do
-						-- order a ship to move there
-						adjustActions $ moveFleet selected uuid
-						-- redraw the starlane map
-						redraw
+						let canJump = elem uuid $ (starlanes view) ! (fleetLocation selected)
+						when (fleetOwner selected == controlled_empire view && canJump) $ do
+							-- order a ship to move there
+							adjustActions $ moveFleet selected uuid
+							-- redraw the starlane map
+							redraw
 					) maybeSelected
 			_ -> pure ()
 
