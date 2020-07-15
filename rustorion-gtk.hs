@@ -413,7 +413,7 @@ handleNewTurn conn windowRef = do
 
 main = do
 	-- getArgs
-	[key, cert] <- unsafeInitGUIForThreadedRTS
+	[cert, key] <- unsafeInitGUIForThreadedRTS
 	missingAuthData <- fmap (not . and) $ sequence $ map doesFileExist [key, cert]
 	when missingAuthData $ makeKeyCert key cert
 
