@@ -322,6 +322,7 @@ handleNewTurn conn windowRef = do
 		{ galaxyDisplayOffsets = (0, 0)
 		, selectedObject = so
 		, updateShipWindow = usw
+		, redrawStarlaneLayer = pure ()
 		}
 	postGUISync $ do
 		-- purge the old window
