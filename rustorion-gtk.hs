@@ -272,9 +272,10 @@ groupedShipsToFleet ships = Fleet
 	}
 
 makePseudoFleets :: UniverseView -> [Fleet]
-makePseudoFleets v@UniverseView {..} = map groupedShipsToFleet $ concat $ map (groupBy ((==) `F.on` byStarSystems)) $ groupBy ((==) `F.on` byEmpires) $ annotateShips v
+makePseudoFleets v@UniverseView {..} = map groupedShipsToFleet $ traceShowId $ concat $ map (groupSortBy byStarSystems) $ groupSortBy byEmpires $ annotateShips v
 	where	byStarSystems (_, _, c) = c
 		byEmpires (_, b, _) = b
+		groupSortBy byWhat = groupBy ((==) `F.on` byWhat) . sortBy (compare `F.on` byWhat)
 
 -- |cache the information about star system ownership
 annotateStarSystems UniverseView {..} = M.fromList $ map (\(id, ss) ->
