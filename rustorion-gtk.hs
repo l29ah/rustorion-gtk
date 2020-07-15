@@ -272,7 +272,7 @@ groupedShipsToFleet ships = Fleet
 	}
 
 makePseudoFleets :: UniverseView -> [Fleet]
-makePseudoFleets v@UniverseView {..} = map groupedShipsToFleet $ traceShowId $ concat $ map (groupSortBy byStarSystems) $ groupSortBy byEmpires $ annotateShips v
+makePseudoFleets v@UniverseView {..} = map groupedShipsToFleet $ concat $ map (groupSortBy byStarSystems) $ groupSortBy byEmpires $ annotateShips v
 	where	byStarSystems (_, _, c) = c
 		byEmpires (_, b, _) = b
 		groupSortBy byWhat = groupBy ((==) `F.on` byWhat) . sortBy (compare `F.on` byWhat)
