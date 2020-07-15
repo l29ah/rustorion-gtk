@@ -3,7 +3,6 @@
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad
-import Data.Coerce
 import Data.Default
 import Data.Function ((&))
 import qualified Data.Function as F
@@ -12,9 +11,7 @@ import Data.List
 import qualified Data.Map as M
 import Data.Map ((!), (!?))
 import Data.Maybe
-import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Void
 import Graphics.Rendering.Cairo
 import Graphics.UI.Gtk as GTK
 import SDL.Init
@@ -81,7 +78,6 @@ makeShipWidget My.Color {..} = do
 -- |adds icons of fleets present in a given star system
 addFleets :: TVar UIState -> Fixed -> UniverseView -> (Fleet -> IO ()) -> [Fleet] -> IO ()
 addFleets uiState layout view onClick fleets = do
-	let ssid = fleetLocation $ head fleets
 	let fleetN = length fleets
 	let fleetAngles = map (\x -> (fromIntegral x) * 2 * pi / (fromIntegral fleetN)) [0..]
 	let fleetIconDistance = 25
@@ -400,7 +396,6 @@ handleNewTurn conn windowRef = do
 				let setShipInfo label Fleet {..} = do
 					let showShipInfo = T.concat [T.pack $ show (length fleetShips), " ships owned by ", (\Empire {..} -> name) $ (empires view) ! fleetOwner]
 					labelSetText label showShipInfo
-				uis <- readTVarIO uiState
 				setShipInfo infoLabel s
 			)) $ groupBy ((==) `F.on` (\Fleet {..} -> fleetLocation)) $ fleets annotatedView
 		UIState { galaxyDisplayOffsets = offsets } <- readTVarIO uiState
