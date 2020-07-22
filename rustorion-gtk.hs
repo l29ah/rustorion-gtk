@@ -11,6 +11,7 @@ import Data.List
 import qualified Data.Map as M
 import Data.Map ((!), (!?))
 import Data.Maybe
+import Data.Text (Text)
 import qualified Data.Text as T
 import Graphics.Rendering.Cairo
 import Graphics.UI.Gtk as GTK
@@ -58,8 +59,8 @@ makeShipWidget My.Color {..} = do
 	it <- iconThemeGetDefault
 	-- TODO gtk_icon_theme_lookup_by_gicon_for_scale
 	let size = 20
-	(Just shipPix) <- iconThemeLoadIcon it ("ship" :: String) size IconLookupGenericFallback
-	(Just reticlePix) <- iconThemeLoadIcon it ("reticle" :: String) size IconLookupGenericFallback
+	(Just shipPix) <- iconThemeLoadIcon it ("ship" :: Text) size IconLookupGenericFallback
+	(Just reticlePix) <- iconThemeLoadIcon it ("reticle" :: Text) size IconLookupGenericFallback
 	widgetSetSizeRequest widget size size
 	on widget draw $ do
 		setSourceRGB (realToFrac r) (realToFrac g) (realToFrac b)
@@ -106,8 +107,8 @@ makeStarSystemWidget My.Color {..} = do
 	it <- iconThemeGetDefault
 	-- TODO gtk_icon_theme_lookup_by_gicon_for_scale
 	let size = 48
-	(Just starPix) <- iconThemeLoadIcon it ("star" :: String) size IconLookupGenericFallback
-	(Just reticlePix) <- iconThemeLoadIcon it ("reticle" :: String) size IconLookupGenericFallback
+	(Just starPix) <- iconThemeLoadIcon it ("star" :: Text) size IconLookupGenericFallback
+	(Just reticlePix) <- iconThemeLoadIcon it ("reticle" :: Text) size IconLookupGenericFallback
 	widgetSetSizeRequest widget size size
 	on widget draw $ do
 		-- set the star system border color to the empire color and make it transparent
@@ -160,8 +161,8 @@ addStarSystem view redraw adjustActions selectedObject layout onClick (xoff, yof
 		when starSystemCanCapture $ do
 			captureButt <- checkButtonNew
 			set captureButt [ widgetOpacity := 0.9 ]
-			captureButtLabel <- labelNew (Nothing :: Maybe String)
-			labelSetMarkup captureButtLabel ("<span foreground=\"red\">capture</span>" :: String)
+			captureButtLabel <- labelNew (Nothing :: Maybe Text)
+			labelSetMarkup captureButtLabel ("<span foreground=\"red\">capture</span>" :: Text)
 			containerAdd captureButt captureButtLabel
 			-- put it under the star system button
 			fixedPut layout captureButt (x, y + (h `div` 2))
@@ -281,7 +282,7 @@ turnWaiter host key cert = do
 
 makeWindow = do
 	w <- windowNew
-	set w [windowTitle := ("rustorion-gtk" :: String)]
+	set w [windowTitle := ("rustorion-gtk" :: Text)]
 
 	-- or better https://askubuntu.com/questions/153549/how-to-detect-a-computers-physical-screen-size-in-gtk
 	scr <- fmap fromJust screenGetDefault
@@ -323,7 +324,7 @@ handleNewTurn conn windowRef = do
 		boxPackStart topPanel turnLabel PackNatural 0
 
 		readyButton <- checkButtonNew
-		readyButtonLabel <- labelNew $ Just ("Ready" :: String)
+		readyButtonLabel <- labelNew $ Just ("Ready" :: Text)
 		containerAdd readyButton readyButtonLabel
 		boxPackStart topPanel readyButton PackNatural 0
 		on readyButton buttonActivated $ do
@@ -331,14 +332,14 @@ handleNewTurn conn windowRef = do
 			readyToAct <- widgetGetSensitive readyButton
 			when (gotReady && readyToAct) $ do
 				readyButton & widgetSetSensitive $ False
-				labelSetText readyButtonLabel ("sending..." :: String)
+				labelSetText readyButtonLabel ("sending..." :: Text)
 				readyButton & toggleButtonSetActive $ False
 				toggleButtonSetInconsistent readyButton True
 				readTVarIO pendingActions >>= print
 				readTVarIO pendingActions >>= setActions conn
 				-- after successful action submission
 				toggleButtonSetInconsistent readyButton False
-				labelSetText readyButtonLabel ("Ready" :: String)
+				labelSetText readyButtonLabel ("Ready" :: Text)
 				readyButton & toggleButtonSetActive $ True
 				readyButton & widgetSetSensitive $ True
 		let adjustActions = adjustPendingActions (readyButton & toggleButtonSetActive $ False) pendingActions conn
@@ -346,7 +347,7 @@ handleNewTurn conn windowRef = do
 		panels <- vPanedNew
 		panedPack2 topPaned panels True True
 
-		infoLabel <- labelNew (Nothing :: Maybe String)
+		infoLabel <- labelNew (Nothing :: Maybe Text)
 		labelSetLineWrap infoLabel True
 		panedPack2 panels infoLabel False False
 
@@ -383,7 +384,7 @@ handleNewTurn conn windowRef = do
 			)) $ groupBy ((==) `F.on` (\Fleet {..} -> fleetLocation)) $ fleets annotatedView
 		UIState { galaxyDisplayOffsets = offsets } <- readTVarIO uiState
 		it <- iconThemeGetDefault
-		(Just crownPix) <- iconThemeLoadIcon it ("crown" :: String) 16 IconLookupGenericFallback
+		(Just crownPix) <- iconThemeLoadIcon it ("crown" :: Text) 16 IconLookupGenericFallback
 		on starlaneLayer draw $ do
 			drawLanes offsets view
 			drawShipMoveOrders offsets view pendingActions
@@ -404,9 +405,9 @@ main = do
 
 	-- request a dark theme variant
 	sets <- fmap fromJust $ settingsGetDefault
-	settingsSetLongProperty sets ("gtk-application-prefer-dark-theme" :: String) 1 []
+	settingsSetLongProperty sets ("gtk-application-prefer-dark-theme" :: Text) 1 mempty
 	-- permit putting images on buttons
-	settingsSetLongProperty sets ("gtk-button-images" :: String) 1 []
+	settingsSetLongProperty sets ("gtk-button-images" :: Text) 1 mempty
 
 	-- tell gtk where to look for icons
 	iconTheme <- iconThemeGetDefault
