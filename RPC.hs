@@ -25,7 +25,7 @@ import Network.Connection
 import Network.TLS
 import Network.TLS.Extra.Cipher
 
-import Types
+import RPC.Types
 
 readSignedObject :: FilePath -> IO [Either String (SignedExact Certificate)]
 readSignedObject file = do

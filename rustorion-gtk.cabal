@@ -18,6 +18,8 @@ executable rustorion-gtk
                        Actions
                        CertGen
                        RPC
+                       RPC.Types
+                       RPC.Translate
                        Types
   build-depends:       base >= 4.12 && < 4.15,
                        msgpack-binary >=0.0 && <0.1,

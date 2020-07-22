@@ -1,103 +1,89 @@
 {-# LANGUAGE DeriveGeneric, DuplicateRecordFields, FlexibleInstances #-}
-module Types where
+module Types
+	( Color(..)
+	, ID(..)
+	, UniverseLocation(..)
+	, Action(..)
+	, Planet(..)
+	, Empire(..)
+	, StarSystem(..)
+	, Ship(..)
+	, UniverseView(..)
+	, UIState(..)
+	, Fleet(..)
+	, AnnotatedUniverseView(..)
+	) where
 
+import Data.Function
 import Data.IORef
 import Data.Map
-import Data.MessagePack as MP
-import Data.Text
-import Data.Void
+import Data.Text as T
 import Data.Word
 import GHC.Generics
 
-newtype ID a = ID Word64 deriving (Show, Eq, Ord, Generic)
-instance MessagePack (ID a)
-
-data Color = Color
-	{ r :: Float
-	, g :: Float
-	, b :: Float
-	} deriving (Show, Eq, Ord, Generic)
-instance MessagePack Color
-
-data UniverseLocation = UniverseLocation
-	{ ulx :: Double
-	, uly :: Double
-	} deriving (Show, Eq, Ord, Generic)
-instance MessagePack UniverseLocation
+import RPC.Types (ID(..), Color(..), UniverseLocation(..), Action(..))
+import qualified RPC.Types as RPC
 
 data Planet = Planet
-	{ uuid :: ID Planet
-	} deriving (Show, Eq, Ord, Generic)
-instance MessagePack Planet
-
-instance {-# OVERLAPPING #-} MessagePack (Maybe (ID a)) where
-	fromObject ObjectNil = pure Nothing
-	fromObject x = fromObject x >>= pure . Just
+	{ planetID :: ID RPC.Planet
+	, planetStarSystem :: Maybe StarSystem
+	} deriving (Generic)
 
 data Empire = Empire
-	{ uuid :: ID Planet
-	, name :: Text
-	, color :: Color
-	, capital :: Maybe (ID StarSystem)
-	} deriving (Show, Eq, Ord, Generic)
-instance MessagePack Empire
+	{ empireID :: ID RPC.Empire
+	, empireName :: Text
+	, empireColor :: Color
+	, empireCapital :: Maybe StarSystem
+	} deriving (Generic)
+instance Eq Empire where
+	(==) = on (==) empireID
 
 data StarSystem = StarSystem
-	{ uuid :: ID StarSystem
-	, name :: Text
-	, location :: UniverseLocation
-	, population :: Word64
-	, can_capture :: Bool
-	} deriving (Show, Eq, Ord, Generic)
-instance MessagePack StarSystem
+	{ starSystemID :: ID RPC.StarSystem
+	, starSystemName :: Text
+	, starSystemLocation :: UniverseLocation
+	, starSystemPopulation :: Word64
+	, starSystemCanCapture :: Bool
+	, starSystemShips :: [Ship]
+	, starSystemLanes :: [StarSystem]
+	, starSystemOwner :: Maybe Empire
+	, isAdjacent :: StarSystem -> Bool
+	} deriving (Generic)
+instance Eq StarSystem where
+	(==) = on (==) starSystemID
+instance Show StarSystem where
+	show = T.unpack . starSystemName
 
 data Ship = Ship
-	{ uuid :: ID Ship
-	, name :: Text
-	} deriving (Show, Eq, Ord, Generic)
-instance MessagePack Ship
-
-data HasMany a b = HasMany
-	{ from :: Map (ID a) ([ID b])
-	, to :: Map (ID b) (ID a)
-	} deriving (Show, Eq, Ord, Generic)
-instance (MessagePack a, MessagePack b) => MessagePack (HasMany a b)
+	{ shipID :: ID RPC.Ship
+	, shipName :: Text
+	, shipLocation :: Maybe StarSystem
+	, shipOwner :: Maybe Empire
+	} deriving (Generic)
 
 data UniverseView = UniverseView
-	{ planets :: Map (ID Planet) Planet
-	, star_systems :: Map (ID StarSystem) StarSystem
-	, current_id :: ID Void
-	, empires :: Map (ID Empire) Empire
-	, planets_in_star_systems :: HasMany StarSystem Planet
-	, starlanes :: Map (ID StarSystem) [ID StarSystem]
-	, star_systems_in_empires :: HasMany Empire StarSystem
-	, ships :: Map (ID Ship) Ship
-	, ships_in_star_systems :: HasMany StarSystem Ship
-	, ships_in_empires :: HasMany Empire Ship
-	, controlled_empire :: ID Empire
-	, turn_number :: Word
-	} deriving (Show, Eq, Generic)
-instance MessagePack UniverseView
+	{ planets :: [Planet]
+	, mapPlanets :: Map (ID RPC.Planet) Planet
+	, starSystems :: [StarSystem]
+	, mapStarSystems :: Map (ID RPC.StarSystem) StarSystem
+	, empires :: [Empire]
+	, mapEmpires :: Map (ID RPC.Empire) Empire
+	, ships :: [Ship]
+	, mapShips :: Map (ID RPC.Ship) Ship
+	, controlledEmpire :: Maybe Empire
+	, turnNumber :: Word
+	} deriving (Generic)
 
 data AnnotatedUniverseView = AnnotatedUniverseView
 	{ view :: UniverseView
-	, annotatedStarSystems :: Map (ID StarSystem) (Maybe Empire, StarSystem)
 	, fleets :: [Fleet]
 	}
 
 data Fleet = Fleet
-	{ fleetShips :: [ID Ship]
-	, fleetLocation :: ID StarSystem
-	, fleetOwner :: ID Empire
+	{ fleetShips :: [Ship]
+	, fleetLocation :: StarSystem
+	, fleetOwner :: Maybe Empire
 	}
-
-data Action =
-	CaptureStarSystem (ID StarSystem) (ID Empire) |
-	MoveShip (ID Ship) (ID StarSystem)
-	deriving (Show, Eq, Generic)
-instance MessagePack Action where
-	toObject (CaptureStarSystem id1 id2) = ObjectMap [(ObjectWord 0, ObjectArray [toObject id1, toObject id2])]
-	toObject (MoveShip id1 id2) = ObjectMap [(ObjectWord 1, ObjectArray [toObject id1, toObject id2])]
 
 data UIState = UIState
 	{ galaxyDisplayOffsets :: (Double, Double)
