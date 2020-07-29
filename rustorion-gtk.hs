@@ -2,7 +2,9 @@
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Exception (assert)
 import Control.Monad
+import Control.Monad.Loops
 import Data.Default
 import Data.Function ((&))
 import qualified Data.Function as F
@@ -152,27 +154,34 @@ addStarSystem view redraw adjustActions selectedObject layout onClick (xoff, yof
 			_ -> pure ()
 
 	let (UniverseLocation x y) = starSystemLocation
+
 	-- place the buttons in the layout so they can be realized
-	fixedPut layout butt ((scaleCoord $ x - xoff), (scaleCoord $ y - yoff))
-	after butt realize $ do
-		-- center the star system buttons on their locations
-		(Rectangle x y w h) <- widgetGetAllocation butt
-		fixedMove layout butt (x - (w `div` 2), y - (h `div` 2))
-		when starSystemCanCapture $ do
-			captureButt <- checkButtonNew
-			set captureButt [ widgetOpacity := 0.9 ]
-			captureButtLabel <- labelNew (Nothing :: Maybe Text)
-			labelSetMarkup captureButtLabel ("<span foreground=\"red\">capture</span>" :: Text)
-			containerAdd captureButt captureButtLabel
-			-- put it under the star system button
-			fixedPut layout captureButt (x, y + (h `div` 2))
-			widgetShowAll captureButt
-			void $ on captureButt toggled $ do
-				activated <- toggleButtonGetActive captureButt
-				case activated of
-					True -> adjustActions $ captureStarSystem starSystemID $ empireID $ fromJust $ controlledEmpire view
-					False -> adjustActions $ dontCaptureStarSystem starSystemID
-	pure ()
+	widgetShowAll butt
+	let layoutCoords@(layoutX, layoutY) = ((scaleCoord $ x - xoff), (scaleCoord $ y - yoff))
+	fixedPut layout butt layoutCoords
+
+	-- wait for the widgets to get evaluated
+	whileM_ (fmap (> 0) eventsPending) $ mainIterationDo False
+	-- so we can know their desired size
+	Requisition w h <- widgetSizeRequest butt
+	-- to place their centers at the desired coordinates
+	assert (w > 0 && h > 0) $ fixedMove layout butt (layoutX - (w `div` 2), layoutY - (h `div` 2))
+
+	-- add a capture button when we can capture a system with our fleet in it
+	when starSystemCanCapture $ do
+		captureButt <- checkButtonNew
+		set captureButt [ widgetOpacity := 0.9 ]
+		captureButtLabel <- labelNew (Nothing :: Maybe Text)
+		labelSetMarkup captureButtLabel ("<span foreground=\"red\">capture</span>" :: Text)
+		containerAdd captureButt captureButtLabel
+		-- put it under the star system button
+		fixedPut layout captureButt (layoutX, layoutY + (h `div` 2))
+		widgetShowAll captureButt
+		void $ on captureButt toggled $ do
+			activated <- toggleButtonGetActive captureButt
+			case activated of
+				True -> adjustActions $ captureStarSystem starSystemID $ empireID $ fromJust $ controlledEmpire view
+				False -> adjustActions $ dontCaptureStarSystem starSystemID
 
 addStarSystems view adjustActions uiState layout onClick systems = do
 	let offsets = (minimum $ map (ulx . starSystemLocation) systems, minimum $ map (uly . starSystemLocation) systems)
@@ -268,8 +277,8 @@ turnWaiter host key cert = do
 	-- first we get the current turn data and utilize it
 	let port = 4433
 	conn <- rpcConnect host port key cert
-	windowRef <- newIORef =<< postGUISync windowNew
-	handleNewTurn conn windowRef
+	window <- postGUISync makeWindow
+	handleNewTurn conn window
 
 	-- then we're waiting for the next turns and handle them
 	let backconnect_port = 4434
@@ -278,7 +287,7 @@ turnWaiter host key cert = do
 		rpcHandle backconn
 		-- assume it's a turn change
 		forkIO $ load "resources/newturn.ogg" >>= play
-		handleNewTurn conn windowRef
+		handleNewTurn conn window
 
 makeWindow = do
 	w <- windowNew
@@ -293,7 +302,7 @@ makeWindow = do
 	on w deleteEvent $ liftIO $ exitWith ExitSuccess
 	pure w
 
-handleNewTurn conn windowRef = do
+handleNewTurn conn w = do
 	view <- fmap translateUniverse $ getView conn
 	so <- newIORef Nothing
 	usw <- newIORef Nothing
@@ -305,15 +314,13 @@ handleNewTurn conn windowRef = do
 		, redrawStarlaneLayer = pure ()
 		}
 	postGUISync $ do
-		-- purge the old window
-		readIORef windowRef >>= widgetDestroy
-		-- and orders for the previous turn
+		-- purge the old window contents
+		oldChild <- binGetChild w
+		maybe (pure ()) (containerRemove w) oldChild
+		-- and user's orders for the previous turn
 		atomically $ writeTVar pendingActions []
 
 		-- create an universe view window
-		w <- makeWindow
-		writeIORef windowRef w
-
 		topPaned <- vPanedNew
 		containerAdd w topPaned
 
