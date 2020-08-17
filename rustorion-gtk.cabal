@@ -17,6 +17,7 @@ executable rustorion-gtk
   other-modules:
                        Actions
                        CertGen
+                       GTKHelpers
                        RPC
                        RPC.Types
                        RPC.Translate

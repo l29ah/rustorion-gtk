@@ -24,6 +24,7 @@ import System.Exit
 
 import Actions
 import CertGen
+import GTKHelpers
 import RPC
 import RPC.Translate
 import Types as My
@@ -273,7 +274,7 @@ makePseudoFleets :: UniverseView -> [Fleet]
 makePseudoFleets UniverseView {..} = map groupedShipsToFleet $ concat $ map (groupSortBy (fmap starSystemID . shipLocation)) $ groupSortBy (fmap empireID . shipOwner) ships
 	where	groupSortBy byWhat = groupBy ((==) `F.on` byWhat) . sortBy (compare `F.on` byWhat)
 
-turnWaiter host key cert = do
+turnWaiter host key cert = terminateOnException $ do
 	-- first we get the current turn data and utilize it
 	let port = 4433
 	conn <- rpcConnect host port key cert
