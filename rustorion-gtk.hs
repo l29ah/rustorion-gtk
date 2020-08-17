@@ -245,7 +245,7 @@ drawSystemIdentifiers crownPix (xoff, yoff) UniverseView {..} = do
 			exts <- textExtents $ starSystemName ss
 			moveTo ((fromIntegral $ scaleCoord $ x - xoff) - textExtentsWidth exts / 2) ((fromIntegral $ scaleCoord $ y - yoff) - systemNameYOffset)
 			showText $ starSystemName ss
-			when (maybe False (\e -> (fmap starSystemID $ empireCapital e) == (Just $ starSystemID ss)) $ starSystemOwner ss) $ do
+			when ((starSystemOwner ss >>= empireCapital) == Just ss) $ do
 				save
 				setSourcePixbuf crownPix (fromIntegral $ scaleCoord $ x - xoff) ((fromIntegral $ scaleCoord $ y - yoff) - systemNameYOffset - crownYOffset)
 				crownPat <- getSource
@@ -384,6 +384,7 @@ handleNewTurn conn w = do
 		-- draw our view content
 		addStarSystems view adjustActions uiState layout (labelSetText infoLabel . show) $ M.elems $ mapStarSystems view
 		mapM_ (addFleets uiState layout (\s@Fleet {..} -> do
+				print "Clicky"
 				let setShipInfo label Fleet {..} = do
 					let showShipInfo = T.concat [T.pack $ show (length fleetShips), " ships owned by ", maybe "noone" empireName fleetOwner]
 					labelSetText label showShipInfo
