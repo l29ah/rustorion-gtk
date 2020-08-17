@@ -44,13 +44,13 @@ translateShip view rpctview RPCT.Ship {..} = Ship
 		M.lookup eid $ mapEmpires view
 	}
 
-translateEmpire :: UniverseView -> RPCT.Empire -> Empire
-translateEmpire view RPCT.Empire {..} = Empire
+translateEmpire :: UniverseView -> RPCT.UniverseView -> RPCT.Empire -> Empire
+translateEmpire view rpctview RPCT.Empire {..} = Empire
 	{ empireID = uuid
 	, empireName = name
 	, empireColor = color
 	, empireCapital = do
-		ssid <- capital
+		ssid <- M.lookup uuid $ RPCT.capitals_in_empires rpctview
 		M.lookup ssid $ mapStarSystems view
 	}
 
@@ -60,7 +60,7 @@ translateUniverse view = result
 		{ mapPlanets = M.map (translatePlanet result view) $ RPCT.planets view
 		, mapStarSystems = M.map (translateStarSystem result view) $ RPCT.star_systems view
 		, mapShips = M.map (translateShip result view) $ RPCT.ships view
-		, mapEmpires = M.map (translateEmpire result) $ RPCT.empires view
+		, mapEmpires = M.map (translateEmpire result view) $ RPCT.empires view
 
 		, planets = M.elems $ mapPlanets result
 		, starSystems = M.elems $ mapStarSystems result

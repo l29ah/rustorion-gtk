@@ -40,7 +40,6 @@ data Empire = Empire
 	{ uuid :: ID Empire
 	, name :: Text
 	, color :: Color
-	, capital :: Maybe (ID StarSystem)
 	} deriving (Show, Eq, Ord, Generic)
 instance MessagePack Empire
 
@@ -76,6 +75,7 @@ data UniverseView = UniverseView
 	, ships :: Map (ID Ship) Ship
 	, ships_in_star_systems :: HasMany StarSystem Ship
 	, ships_in_empires :: HasMany Empire Ship
+	, capitals_in_empires :: Map (ID Empire) (ID StarSystem)
 	, controlled_empire :: ID Empire
 	, turn_number :: Word
 	} deriving (Show, Eq, Generic)
