@@ -13,8 +13,8 @@ import Prelude hiding (id)
 
 translatePlanet :: UniverseView -> RPCT.UniverseView -> RPCT.Planet -> Planet
 translatePlanet view rpctview RPCT.Planet {..} = Planet
-	{ planetID = uuid
-	, planetStarSystem = do
+	{ id = uuid
+	, starSystem = do
 		ssid <- M.lookup uuid $ RPCT.to $ RPCT.planets_in_star_systems rpctview
 		M.lookup ssid $ mapStarSystems view
 	}
@@ -31,27 +31,27 @@ translateStarSystem view rpctview RPCT.StarSystem {..} = StarSystem
 		eid <- M.lookup uuid $ RPCT.to $ RPCT.star_systems_in_empires rpctview
 		M.lookup eid $ mapEmpires view
 	, lanes = concatMap (\linkedSystem -> maybeToList $ M.lookup linkedSystem $ mapStarSystems view) $ concat $ maybeToList $ M.lookup uuid $ RPCT.starlanes rpctview
-	, isAdjacent = \otherSystem -> elem (id otherSystem) $ concat $ maybeToList $ M.lookup uuid $ RPCT.starlanes rpctview
+	, isAdjacent = \otherSystem -> elem (id (otherSystem :: StarSystem)) $ concat $ maybeToList $ M.lookup uuid $ RPCT.starlanes rpctview
 	}
 
 translateShip :: UniverseView -> RPCT.UniverseView -> RPCT.Ship -> Ship
 translateShip view rpctview RPCT.Ship {..} = Ship
-	{ shipID = uuid
-	, shipName = name
-	, shipLocation = do
+	{ id = uuid
+	, name = name
+	, location = do
 		ssid <- M.lookup uuid $ RPCT.to $ RPCT.ships_in_star_systems rpctview
 		M.lookup ssid $ mapStarSystems view
-	, shipOwner = do
+	, owner = do
 		eid <- M.lookup uuid $ RPCT.to $ RPCT.ships_in_empires rpctview
 		M.lookup eid $ mapEmpires view
 	}
 
 translateEmpire :: UniverseView -> RPCT.UniverseView -> RPCT.Empire -> Empire
 translateEmpire view rpctview RPCT.Empire {..} = Empire
-	{ empireID = uuid
-	, empireName = name
-	, empireColor = color
-	, empireCapital = do
+	{ id = uuid
+	, name = name
+	, color = color
+	, capital = do
 		ssid <- M.lookup uuid $ RPCT.capitals_in_empires rpctview
 		M.lookup ssid $ mapStarSystems view
 	}

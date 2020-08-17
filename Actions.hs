@@ -4,10 +4,12 @@ module Actions where
 import Control.Concurrent.MVar
 import Control.Concurrent.STM
 import Network.Connection
+import Prelude hiding (id)
+import Data.Function hiding (id)
 
 import RPC
 import RPC.Types as RPCT
-import Types (Fleet(..))
+import Types
 import qualified Types as My
 
 dontCaptureStarSystem :: ID StarSystem -> [Action] -> [Action]
@@ -33,10 +35,10 @@ moveShip shid ssid actions = MoveShip shid ssid : dontMoveShip shid actions
 apply = foldl1 (.)
 
 dontMoveFleet :: Fleet -> [Action] -> [Action]
-dontMoveFleet Fleet {..} = apply (map dontMoveShip $ map My.shipID fleetShips)
+dontMoveFleet Fleet {..} = apply (map dontMoveShip $ map (id) ships)
 
 moveFleet :: Fleet -> ID StarSystem -> [Action] -> [Action]
-moveFleet f@Fleet {..} ssid = apply (map (\ship -> moveShip (My.shipID ship) ssid) fleetShips) . dontMoveFleet f
+moveFleet f@Fleet {..} ssid = apply (map (\ship -> moveShip (id ship) ssid) ships) . dontMoveFleet f
 
 adjustPendingActions :: IO () -> TVar [Action] -> MVar Connection -> ([Action] -> [Action]) -> IO ()
 adjustPendingActions untick actionVar conn modifier = do

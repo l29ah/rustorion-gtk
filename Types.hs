@@ -14,30 +14,30 @@ module Types
 	, AnnotatedUniverseView(..)
 	) where
 
-import Data.Function
 import Data.IORef
 import Data.Map
 import Data.Text as T
 import Data.Word
 import GHC.Generics
 import Data.Function hiding (id)
+import Prelude hiding (id)
 
 import RPC.Types (ID(..), Color(..), UniverseLocation(..), Action(..))
 import qualified RPC.Types as RPC
 
 data Planet = Planet
-	{ planetID :: ID RPC.Planet
-	, planetStarSystem :: Maybe StarSystem
+	{ id :: ID RPC.Planet
+	, starSystem :: Maybe StarSystem
 	} deriving (Generic)
 
 data Empire = Empire
-	{ empireID :: ID RPC.Empire
-	, empireName :: Text
-	, empireColor :: Color
-	, empireCapital :: Maybe StarSystem
+	{ id :: ID RPC.Empire
+	, name :: Text
+	, color :: Color
+	, capital :: Maybe StarSystem
 	} deriving (Generic)
 instance Eq Empire where
-	(==) = on (==) empireID
+	a == b = id (a :: Empire) == id (b :: Empire)
 
 data StarSystem = StarSystem
 	{ id :: ID RPC.StarSystem
@@ -51,15 +51,15 @@ data StarSystem = StarSystem
 	, isAdjacent :: StarSystem -> Bool
 	} deriving (Generic)
 instance Eq StarSystem where
-	(==) = on (==) Types.id
+	a == b = id (a :: StarSystem) == id (b :: StarSystem)
 instance Show StarSystem where
-	show = T.unpack . name
+	show a = T.unpack $ name (a :: StarSystem)
 
 data Ship = Ship
-	{ shipID :: ID RPC.Ship
-	, shipName :: Text
-	, shipLocation :: Maybe StarSystem
-	, shipOwner :: Maybe Empire
+	{ id :: ID RPC.Ship
+	, name :: Text
+	, location :: Maybe StarSystem
+	, owner :: Maybe Empire
 	} deriving (Generic)
 
 data UniverseView = UniverseView
@@ -81,9 +81,9 @@ data AnnotatedUniverseView = AnnotatedUniverseView
 	}
 
 data Fleet = Fleet
-	{ fleetShips :: [Ship]
-	, fleetLocation :: StarSystem
-	, fleetOwner :: Maybe Empire
+	{ ships :: [Ship]
+	, location :: StarSystem
+	, owner :: Maybe Empire
 	}
 
 data UIState = UIState

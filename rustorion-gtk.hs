@@ -217,7 +217,7 @@ drawShipMoveOrders offsets (UniverseView {..}) pendingActions = do
 	mapM_ (\(MoveShip id toid) -> do
 			let ship = mapShips ! id
 			let toLocation = location $ mapStarSystems ! toid
-			drawShipMoveOrder offsets (location $ fromJust $ shipLocation ship) toLocation
+			drawShipMoveOrder offsets (location $ fromJust $ location ship) toLocation
 		) shipMoveActions
 
 drawLane (xoff, yoff) (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
@@ -266,14 +266,14 @@ annotateUniverseView v@UniverseView {..} = AnnotatedUniverseView
 -- |assumes the input is grouped by empires and star systems
 groupedShipsToFleet :: [Ship] -> Fleet
 groupedShipsToFleet ships = Fleet
-	{ fleetShips = ships
-	, fleetLocation = fromJust $ shipLocation $ head ships
-	, fleetOwner = shipOwner $ head ships
+	{ ships = ships
+	, location = fromJust $ location $ head ships
+	, owner = owner $ head ships
 	}
 
 makePseudoFleets :: UniverseView -> [Fleet]
-makePseudoFleets UniverseView {..} = map groupedShipsToFleet $ concat $ map (groupSortBy (fmap id . shipLocation)) $ groupSortBy (fmap empireID . shipOwner) ships
-	where	groupSortBy byWhat = groupBy ((==) `F.on` byWhat) . sortBy (compare `F.on` byWhat)
+makePseudoFleets UniverseView {..} = map groupedShipsToFleet $ concat $ map (groupSortBy (fmap id . location)) $ groupSortBy (fmap empireID . owner) ships
+	where groupSortBy byWhat = groupBy ((==) `F.on` byWhat) . sortBy (compare `F.on` byWhat)
 
 turnWaiter host key cert = terminateOnException $ do
 	-- first we get the current turn data and utilize it
