@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric, DuplicateRecordFields, FlexibleInstances #-}
+{-# LANGUAGE DeriveGeneric, DuplicateRecordFields, FlexibleInstances, DisambiguateRecordFields #-}
 module RPC.Types where
 
 import Data.Default

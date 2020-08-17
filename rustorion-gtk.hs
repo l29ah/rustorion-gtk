@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, DuplicateRecordFields, RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, DuplicateRecordFields, RecordWildCards, DisambiguateRecordFields, NamedFieldPuns #-}
 
 import Control.Concurrent
 import Control.Concurrent.STM
@@ -21,6 +21,7 @@ import SDL.Init
 import SDL.Mixer
 import System.Directory
 import System.Exit
+import Prelude hiding (id)
 
 import Actions
 import CertGen
@@ -100,7 +101,7 @@ addFleet (xoffset, yoffset) uiState layout onClick fleet@Fleet {..} = do
 			writeIORef selectedObject $ Just fleet
 			widgetGrabFocus butt
 			onClick fleet
-	let (UniverseLocation x y) = starSystemLocation fleetLocation
+	let (UniverseLocation x y) = location fleetLocation
 	fixedPut layout butt (xoffset + (scaleCoord $ x - fst galaxyDisplayOffsets), (yoffset + (scaleCoord $ y - snd galaxyDisplayOffsets)))
 
 makeStarSystemWidget :: My.Color -> IO DrawingArea
@@ -131,8 +132,8 @@ makeStarSystemWidget My.Color {..} = do
 	pure widget
 
 addStarSystem :: UniverseView -> IO () -> (([My.Action] -> [My.Action]) -> IO ()) -> IORef (Maybe Fleet) -> Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> StarSystem -> IO ()
-addStarSystem view redraw adjustActions selectedObject layout onClick (xoff, yoff) ss@StarSystem {..} = do
-	butt <- makeStarSystemWidget $ maybe (My.Color 0.5 0.5 0.5) empireColor $ starSystemOwner
+addStarSystem view redraw adjustActions selectedObject layout onClick (xoff, yoff) ss = do
+	butt <- makeStarSystemWidget $ maybe (My.Color 0.5 0.5 0.5) empireColor $ owner ss
 	set butt [ widgetOpacity := 0.9 ]
 
 	after butt buttonPressEvent $ tryEvent $ do
@@ -145,16 +146,16 @@ addStarSystem view redraw adjustActions selectedObject layout onClick (xoff, yof
 			RightButton -> do
 				maybeSelected <- readIORef selectedObject
 				maybe (pure ()) (\selected -> do
-						let canJump = isAdjacent $ fleetLocation selected
+						let canJump = isAdjacent ss $ fleetLocation selected
 						when (fleetOwner selected == controlledEmpire view && canJump) $ do
 							-- order a ship to move there
-							adjustActions $ moveFleet selected starSystemID
+							adjustActions $ moveFleet selected $ id ss
 							-- redraw the starlane map
 							redraw
 					) maybeSelected
 			_ -> pure ()
 
-	let (UniverseLocation x y) = starSystemLocation
+	let (UniverseLocation x y) = location ss
 
 	-- place the buttons in the layout so they can be realized
 	widgetShowAll butt
@@ -169,7 +170,7 @@ addStarSystem view redraw adjustActions selectedObject layout onClick (xoff, yof
 	assert (w > 0 && h > 0) $ fixedMove layout butt (layoutX - (w `div` 2), layoutY - (h `div` 2))
 
 	-- add a capture button when we can capture a system with our fleet in it
-	when starSystemCanCapture $ do
+	when (canCapture ss) $ do
 		captureButt <- checkButtonNew
 		set captureButt [ widgetOpacity := 0.9 ]
 		captureButtLabel <- labelNew (Nothing :: Maybe Text)
@@ -181,11 +182,11 @@ addStarSystem view redraw adjustActions selectedObject layout onClick (xoff, yof
 		void $ on captureButt toggled $ do
 			activated <- toggleButtonGetActive captureButt
 			case activated of
-				True -> adjustActions $ captureStarSystem starSystemID $ empireID $ fromJust $ controlledEmpire view
-				False -> adjustActions $ dontCaptureStarSystem starSystemID
+				True -> adjustActions $ captureStarSystem (id ss) $ empireID $ fromJust $ controlledEmpire view
+				False -> adjustActions $ dontCaptureStarSystem (id ss)
 
 addStarSystems view adjustActions uiState layout onClick systems = do
-	let offsets = (minimum $ map (ulx . starSystemLocation) systems, minimum $ map (uly . starSystemLocation) systems)
+	let offsets = (minimum $ map (ulx . location) systems, minimum $ map (uly . location) systems)
 	atomically $ modifyTVar' uiState $ \s -> s { galaxyDisplayOffsets = offsets }
 	st <- readTVarIO uiState
 	mapM_ (addStarSystem view (redrawStarlaneLayer st) adjustActions (selectedObject st) layout onClick offsets) systems
@@ -215,8 +216,8 @@ drawShipMoveOrders offsets (UniverseView {..}) pendingActions = do
 	let shipMoveActions = filter (\act -> case act of; MoveShip _ _ -> True; _ -> False) actions
 	mapM_ (\(MoveShip id toid) -> do
 			let ship = mapShips ! id
-			let toLocation = starSystemLocation $ mapStarSystems ! toid
-			drawShipMoveOrder offsets (starSystemLocation $ fromJust $ shipLocation ship) toLocation
+			let toLocation = location $ mapStarSystems ! toid
+			drawShipMoveOrder offsets (location $ fromJust $ shipLocation ship) toLocation
 		) shipMoveActions
 
 drawLane (xoff, yoff) (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
@@ -232,8 +233,8 @@ drawLanes offsets UniverseView {..} = do
 	paint
 
 	mapM_ (\ss1 -> mapM_ (\ss2 ->
-				drawLane offsets (starSystemLocation ss1) (starSystemLocation ss2)
-			) $ starSystemLanes ss1
+				drawLane offsets (location ss1) (location ss2)
+			) $ lanes ss1
 		) $ starSystems
 
 drawSystemIdentifiers crownPix (xoff, yoff) UniverseView {..} = do
@@ -241,16 +242,16 @@ drawSystemIdentifiers crownPix (xoff, yoff) UniverseView {..} = do
 	let systemNameYOffset = 35
 	let crownYOffset = 18
 	mapM_ (\ss -> do
-			let UniverseLocation x y = starSystemLocation ss
+			let UniverseLocation x y = location ss
 			setFontSize 16
-			exts <- textExtents $ starSystemName ss
+			exts <- textExtents $ name ss
 			moveTo ((fromIntegral $ scaleCoord $ x - xoff) - textExtentsWidth exts / 2) ((fromIntegral $ scaleCoord $ y - yoff) - systemNameYOffset)
-			showText $ starSystemName ss
-			when ((starSystemOwner ss >>= empireCapital) == Just ss) $ do
+			showText $ name ss
+			when ((owner ss >>= empireCapital) == Just ss) $ do
 				save
 				setSourcePixbuf crownPix (fromIntegral $ scaleCoord $ x - xoff) ((fromIntegral $ scaleCoord $ y - yoff) - systemNameYOffset - crownYOffset)
 				crownPat <- getSource
-				let My.Color {..} = empireColor $ fromJust $ starSystemOwner ss
+				let My.Color {..} = empireColor $ fromJust $ owner ss
 				setSourceRGB (realToFrac r) (realToFrac g) (realToFrac b)
 				mask crownPat
 				restore
@@ -271,7 +272,7 @@ groupedShipsToFleet ships = Fleet
 	}
 
 makePseudoFleets :: UniverseView -> [Fleet]
-makePseudoFleets UniverseView {..} = map groupedShipsToFleet $ concat $ map (groupSortBy (fmap starSystemID . shipLocation)) $ groupSortBy (fmap empireID . shipOwner) ships
+makePseudoFleets UniverseView {..} = map groupedShipsToFleet $ concat $ map (groupSortBy (fmap id . shipLocation)) $ groupSortBy (fmap empireID . shipOwner) ships
 	where	groupSortBy byWhat = groupBy ((==) `F.on` byWhat) . sortBy (compare `F.on` byWhat)
 
 turnWaiter host key cert = terminateOnException $ do

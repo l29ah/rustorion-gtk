@@ -20,6 +20,7 @@ import Data.Map
 import Data.Text as T
 import Data.Word
 import GHC.Generics
+import Data.Function hiding (id)
 
 import RPC.Types (ID(..), Color(..), UniverseLocation(..), Action(..))
 import qualified RPC.Types as RPC
@@ -39,20 +40,20 @@ instance Eq Empire where
 	(==) = on (==) empireID
 
 data StarSystem = StarSystem
-	{ starSystemID :: ID RPC.StarSystem
-	, starSystemName :: Text
-	, starSystemLocation :: UniverseLocation
-	, starSystemPopulation :: Word64
-	, starSystemCanCapture :: Bool
-	, starSystemShips :: [Ship]
-	, starSystemLanes :: [StarSystem]
-	, starSystemOwner :: Maybe Empire
+	{ id :: ID RPC.StarSystem
+	, name :: Text
+	, location :: UniverseLocation
+	, population :: Word64
+	, canCapture :: Bool
+	, ships :: [Ship]
+	, lanes :: [StarSystem]
+	, owner :: Maybe Empire
 	, isAdjacent :: StarSystem -> Bool
 	} deriving (Generic)
 instance Eq StarSystem where
-	(==) = on (==) starSystemID
+	(==) = on (==) Types.id
 instance Show StarSystem where
-	show = T.unpack . starSystemName
+	show = T.unpack . name
 
 data Ship = Ship
 	{ shipID :: ID RPC.Ship

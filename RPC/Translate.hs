@@ -1,4 +1,4 @@
-{-# LANGUAGE DuplicateRecordFields, RecordWildCards #-}
+{-# LANGUAGE DuplicateRecordFields, RecordWildCards, DisambiguateRecordFields #-}
 module RPC.Translate
 	( translateUniverse
 	) where
@@ -8,6 +8,8 @@ import Data.Maybe
 
 import qualified RPC.Types as RPCT
 import Types
+import Data.Function hiding (id)
+import Prelude hiding (id)
 
 translatePlanet :: UniverseView -> RPCT.UniverseView -> RPCT.Planet -> Planet
 translatePlanet view rpctview RPCT.Planet {..} = Planet
@@ -19,17 +21,17 @@ translatePlanet view rpctview RPCT.Planet {..} = Planet
 
 translateStarSystem :: UniverseView -> RPCT.UniverseView -> RPCT.StarSystem -> StarSystem
 translateStarSystem view rpctview RPCT.StarSystem {..} = StarSystem
-	{ starSystemID = uuid
-	, starSystemName = name
-	, starSystemLocation = location
-	, starSystemPopulation = population
-	, starSystemCanCapture = can_capture
-	, starSystemShips = concat $ map maybeToList $ map (\i -> M.lookup i $ mapShips view) $ concat $ maybeToList $ M.lookup uuid (RPCT.from $ RPCT.ships_in_star_systems rpctview)
-	, starSystemOwner = do
+	{ id = uuid
+	, name = name
+	, location = location
+	, population = population
+	, canCapture = can_capture
+	, ships = concat $ map maybeToList $ map (\i -> M.lookup i $ mapShips view) $ concat $ maybeToList $ M.lookup uuid (RPCT.from $ RPCT.ships_in_star_systems rpctview)
+	, owner = do
 		eid <- M.lookup uuid $ RPCT.to $ RPCT.star_systems_in_empires rpctview
 		M.lookup eid $ mapEmpires view
-	, starSystemLanes = concatMap (\linkedSystem -> maybeToList $ M.lookup linkedSystem $ mapStarSystems view) $ concat $ maybeToList $ M.lookup uuid $ RPCT.starlanes rpctview
-	, isAdjacent = \otherSystem -> elem (starSystemID otherSystem) $ concat $ maybeToList $ M.lookup uuid $ RPCT.starlanes rpctview
+	, lanes = concatMap (\linkedSystem -> maybeToList $ M.lookup linkedSystem $ mapStarSystems view) $ concat $ maybeToList $ M.lookup uuid $ RPCT.starlanes rpctview
+	, isAdjacent = \otherSystem -> elem (id otherSystem) $ concat $ maybeToList $ M.lookup uuid $ RPCT.starlanes rpctview
 	}
 
 translateShip :: UniverseView -> RPCT.UniverseView -> RPCT.Ship -> Ship
