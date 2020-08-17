@@ -384,7 +384,6 @@ handleNewTurn conn w = do
 		-- draw our view content
 		addStarSystems view adjustActions uiState layout (labelSetText infoLabel . show) $ M.elems $ mapStarSystems view
 		mapM_ (addFleets uiState layout (\s@Fleet {..} -> do
-				print "Clicky"
 				let setShipInfo label Fleet {..} = do
 					let showShipInfo = T.concat [T.pack $ show (length fleetShips), " ships owned by ", maybe "noone" empireName fleetOwner]
 					labelSetText label showShipInfo
