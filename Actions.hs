@@ -38,7 +38,7 @@ dontMoveFleet :: My.Fleet -> [Action] -> [Action]
 dontMoveFleet My.Fleet {..} = apply (map dontMoveShip $ map (.id) ships)
 
 moveFleet :: My.Fleet -> ID RPCT.StarSystem -> [Action] -> [Action]
-moveFleet f@My.Fleet {..} ssid = apply (map (\ship -> moveShip (ship.id) ssid) ships) . dontMoveFleet f
+moveFleet fleet ssid = apply (map (\ship -> moveShip (ship.id) ssid) fleet.ships)
 
 adjustPendingActions :: IO () -> TVar [Action] -> MVar Connection -> ([Action] -> [Action]) -> IO ()
 adjustPendingActions untick actionVar conn modifier = do
