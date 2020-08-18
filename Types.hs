@@ -1,4 +1,5 @@
-{-# LANGUAGE DeriveGeneric, DuplicateRecordFields, FlexibleInstances #-}
+{-# OPTIONS_GHC -fplugin=RecordDotPreprocessor #-}
+{-# LANGUAGE DeriveGeneric, DuplicateRecordFields, FlexibleInstances, DataKinds, TypeApplications, FlexibleContexts,MultiParamTypeClasses, TypeSynonymInstances #-}
 module Types
 	( Color(..)
 	, ID(..)
@@ -37,7 +38,7 @@ data Empire = Empire
 	, capital :: Maybe StarSystem
 	} deriving (Generic)
 instance Eq Empire where
-	a == b = id (a :: Empire) == id (b :: Empire)
+	(==) = on (==) (.id)
 
 data StarSystem = StarSystem
 	{ id :: ID RPC.StarSystem

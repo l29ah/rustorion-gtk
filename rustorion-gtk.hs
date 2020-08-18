@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, DuplicateRecordFields, RecordWildCards, DisambiguateRecordFields, NamedFieldPuns #-}
-
+{-# OPTIONS_GHC -fplugin=RecordDotPreprocessor #-}
+{-# LANGUAGE DeriveGeneric, DuplicateRecordFields, FlexibleInstances, DataKinds, TypeApplications, FlexibleContexts,MultiParamTypeClasses, TypeSynonymInstances, RecordWildCards #-}
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception (assert)
@@ -91,9 +92,9 @@ addFleets uiState layout onClick fleets = do
 	sequence_ $ zipWith (\angle fleet -> addFleet (fleetIconOffset angle) uiState layout onClick fleet) fleetAngles fleets
 
 addFleet :: (Int, Int) -> TVar UIState -> Fixed -> (Fleet -> IO ()) -> Fleet -> IO ()
-addFleet (xoffset, yoffset) uiState layout onClick fleet@Fleet {..} = do
+addFleet (xoffset, yoffset) uiState layout onClick fleet = do
 	UIState {..} <- readTVarIO uiState
-	butt <- makeShipWidget $ maybe def empireColor $ fleetOwner
+	butt <- makeShipWidget $ fromMaybe (My.Color 0.5 0.5 0.5) $ fmap (\s -> s.color) fleet.owner
 	set butt [ widgetOpacity := 0.9 ]
 	after butt buttonPressEvent $ tryEvent $ do
 		LeftButton <- eventButton
@@ -101,7 +102,7 @@ addFleet (xoffset, yoffset) uiState layout onClick fleet@Fleet {..} = do
 			writeIORef selectedObject $ Just fleet
 			widgetGrabFocus butt
 			onClick fleet
-	let (UniverseLocation x y) = location fleetLocation
+	let (UniverseLocation x y) = fleet.location.location
 	fixedPut layout butt (xoffset + (scaleCoord $ x - fst galaxyDisplayOffsets), (yoffset + (scaleCoord $ y - snd galaxyDisplayOffsets)))
 
 makeStarSystemWidget :: My.Color -> IO DrawingArea
@@ -133,7 +134,7 @@ makeStarSystemWidget My.Color {..} = do
 
 addStarSystem :: UniverseView -> IO () -> (([My.Action] -> [My.Action]) -> IO ()) -> IORef (Maybe Fleet) -> Fixed -> (StarSystem -> IO ()) -> (Double, Double) -> StarSystem -> IO ()
 addStarSystem view redraw adjustActions selectedObject layout onClick (xoff, yoff) ss = do
-	butt <- makeStarSystemWidget $ maybe (My.Color 0.5 0.5 0.5) empireColor $ owner ss
+	butt <- makeStarSystemWidget $ fromMaybe (My.Color 0.5 0.5 0.5) $ fmap (.color) ss.owner
 	set butt [ widgetOpacity := 0.9 ]
 
 	after butt buttonPressEvent $ tryEvent $ do
@@ -146,16 +147,16 @@ addStarSystem view redraw adjustActions selectedObject layout onClick (xoff, yof
 			RightButton -> do
 				maybeSelected <- readIORef selectedObject
 				maybe (pure ()) (\selected -> do
-						let canJump = isAdjacent ss $ fleetLocation selected
-						when (fleetOwner selected == controlledEmpire view && canJump) $ do
+						let canJump = isAdjacent ss $ selected.location
+						when (selected.owner == view.controlledEmpire && canJump) $ do
 							-- order a ship to move there
-							adjustActions $ moveFleet selected $ id ss
+							adjustActions $ moveFleet selected $ ss.id
 							-- redraw the starlane map
 							redraw
 					) maybeSelected
 			_ -> pure ()
 
-	let (UniverseLocation x y) = location ss
+	let (UniverseLocation x y) = ss.location
 
 	-- place the buttons in the layout so they can be realized
 	widgetShowAll butt
@@ -182,11 +183,11 @@ addStarSystem view redraw adjustActions selectedObject layout onClick (xoff, yof
 		void $ on captureButt toggled $ do
 			activated <- toggleButtonGetActive captureButt
 			case activated of
-				True -> adjustActions $ captureStarSystem (id ss) $ empireID $ fromJust $ controlledEmpire view
-				False -> adjustActions $ dontCaptureStarSystem (id ss)
+				True -> adjustActions $ captureStarSystem ss.id $ (fromJust $ controlledEmpire view).id
+				False -> adjustActions $ dontCaptureStarSystem ss.id
 
 addStarSystems view adjustActions uiState layout onClick systems = do
-	let offsets = (minimum $ map (ulx . location) systems, minimum $ map (uly . location) systems)
+	let offsets = (minimum $ map (\s -> ulx s.location) systems, minimum $ map (\s -> uly s.location) systems)
 	atomically $ modifyTVar' uiState $ \s -> s { galaxyDisplayOffsets = offsets }
 	st <- readTVarIO uiState
 	mapM_ (addStarSystem view (redrawStarlaneLayer st) adjustActions (selectedObject st) layout onClick offsets) systems
@@ -216,8 +217,8 @@ drawShipMoveOrders offsets (UniverseView {..}) pendingActions = do
 	let shipMoveActions = filter (\act -> case act of; MoveShip _ _ -> True; _ -> False) actions
 	mapM_ (\(MoveShip id toid) -> do
 			let ship = mapShips ! id
-			let toLocation = location $ mapStarSystems ! toid
-			drawShipMoveOrder offsets (location $ fromJust $ location ship) toLocation
+			let toLocation = (mapStarSystems ! toid).location
+			drawShipMoveOrder offsets ((ship.location & fromJust).location) toLocation
 		) shipMoveActions
 
 drawLane (xoff, yoff) (UniverseLocation x1 y1) (UniverseLocation x2 y2) = do
@@ -233,7 +234,7 @@ drawLanes offsets UniverseView {..} = do
 	paint
 
 	mapM_ (\ss1 -> mapM_ (\ss2 ->
-				drawLane offsets (location ss1) (location ss2)
+				drawLane offsets (ss1.location) (ss2.location)
 			) $ lanes ss1
 		) $ starSystems
 
@@ -242,16 +243,16 @@ drawSystemIdentifiers crownPix (xoff, yoff) UniverseView {..} = do
 	let systemNameYOffset = 35
 	let crownYOffset = 18
 	mapM_ (\ss -> do
-			let UniverseLocation x y = location ss
+			let UniverseLocation x y = ss.location
 			setFontSize 16
-			exts <- textExtents $ name ss
+			exts <- textExtents $ ss.name
 			moveTo ((fromIntegral $ scaleCoord $ x - xoff) - textExtentsWidth exts / 2) ((fromIntegral $ scaleCoord $ y - yoff) - systemNameYOffset)
-			showText $ name ss
-			when ((owner ss >>= empireCapital) == Just ss) $ do
+			showText $ ss.name
+			when ((ss.owner >>= (.capital)) == Just ss) $ do
 				save
 				setSourcePixbuf crownPix (fromIntegral $ scaleCoord $ x - xoff) ((fromIntegral $ scaleCoord $ y - yoff) - systemNameYOffset - crownYOffset)
 				crownPat <- getSource
-				let My.Color {..} = empireColor $ fromJust $ owner ss
+				let My.Color {..} = (ss.owner & fromJust).color
 				setSourceRGB (realToFrac r) (realToFrac g) (realToFrac b)
 				mask crownPat
 				restore
@@ -267,12 +268,12 @@ annotateUniverseView v@UniverseView {..} = AnnotatedUniverseView
 groupedShipsToFleet :: [Ship] -> Fleet
 groupedShipsToFleet ships = Fleet
 	{ ships = ships
-	, location = fromJust $ location $ head ships
-	, owner = owner $ head ships
+	, location = fromJust $ (head ships).location
+	, owner = (head ships).owner
 	}
 
 makePseudoFleets :: UniverseView -> [Fleet]
-makePseudoFleets UniverseView {..} = map groupedShipsToFleet $ concat $ map (groupSortBy (fmap id . location)) $ groupSortBy (fmap empireID . owner) ships
+makePseudoFleets UniverseView {..} = map groupedShipsToFleet $ concat $ map (groupSortBy (fmap (.id) . (.location))) $ groupSortBy (fmap (.id) . (.owner)) ships
 	where groupSortBy byWhat = groupBy ((==) `F.on` byWhat) . sortBy (compare `F.on` byWhat)
 
 turnWaiter host key cert = terminateOnException $ do
@@ -385,12 +386,12 @@ handleNewTurn conn w = do
 
 		-- draw our view content
 		addStarSystems view adjustActions uiState layout (labelSetText infoLabel . show) $ M.elems $ mapStarSystems view
-		mapM_ (addFleets uiState layout (\s@Fleet {..} -> do
-				let setShipInfo label Fleet {..} = do
-					let showShipInfo = T.concat [T.pack $ show (length fleetShips), " ships owned by ", maybe "noone" empireName fleetOwner]
+		mapM_ (addFleets uiState layout (\fleet -> do
+				let setShipInfo label cFleet = do
+					let showShipInfo = T.concat [T.pack $ show (length cFleet.ships), " ships owned by ", fromMaybe "no one" (fmap (.name) cFleet.owner)]
 					labelSetText label showShipInfo
-				setShipInfo infoLabel s
-			)) $ groupBy ((==) `F.on` (\Fleet {..} -> fleetLocation)) $ fleets annotatedView
+				setShipInfo infoLabel fleet
+			)) $ groupBy ((==) `F.on` (.location)) $ fleets annotatedView
 		UIState { galaxyDisplayOffsets = offsets } <- readTVarIO uiState
 		it <- iconThemeGetDefault
 		(Just crownPix) <- iconThemeLoadIcon it ("crown" :: Text) 16 IconLookupGenericFallback
